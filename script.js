@@ -1,12 +1,14 @@
 /* ===== CONFIG ===== */
 const SUPABASE_URL = "https://muheqytnxuhjokvjamgl.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aGVxeXRueHVoam9rdmphbWdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4NzY0NDEsImV4cCI6MjA3OTQ1MjQ0MX0.AzwDieQ_8SUCVqfJInydqQqT86_qBF5qUoSP56EMFUE";
-const SECRET_PASS = "chamar";
+const SECRET_PASS = "chamar"; 
+const ADMIN_TRIGGER = "add/adminamit808801";
 /* ================== */
 
 const supabaseClient = supabase.createClient(
   SUPABASE_URL,
-  SUPABASE_ANON_KEY
+  SUPABASE_ANON_KEY,
+  { realtime: { params: { eventsPerSecond: 20 } } }
 );
 
 /* ELEMENTS */
@@ -28,21 +30,19 @@ document.getElementById("login-btn").onclick = () => {
   }
 };
 
-/* LOAD MESSAGES */
+/* LOAD */
 async function loadMessages() {
-  const { data, error } = await supabaseClient
+  const { data } = await supabaseClient
     .from("messages")
     .select("*")
     .order("created_at", { ascending: true });
 
-  if (error) return console.error(error);
-
   messagesBox.innerHTML = "";
   data.forEach(addMessage);
-  messagesBox.scrollTop = messagesBox.scrollHeight;
+  scrollBottom();
 }
 
-/* ADD MESSAGE */
+/* ADD */
 function addMessage(msg) {
   const div = document.createElement("div");
   div.className = "msg";
@@ -52,16 +52,24 @@ function addMessage(msg) {
 
 /* SEND */
 document.getElementById("send-btn").onclick = async () => {
-  if (!msgInput.value) return;
+  const text = msgInput.value.trim();
+  if (!text) return;
 
-  await supabaseClient.from("messages").insert({
-    content: msgInput.value
-  });
+  // ADMIN COMMAND (hidden)
+  if (text === ADMIN_TRIGGER) {
+    if (confirm("ADMIN: Delete all messages?")) {
+      await supabaseClient.from("messages").delete().neq("id", 0);
+      messagesBox.innerHTML = "";
+    }
+    msgInput.value = "";
+    return;
+  }
 
+  await supabaseClient.from("messages").insert({ content: text });
   msgInput.value = "";
 };
 
-/* REALTIME */
+/* REALTIME (FAST) */
 function subscribeRealtime() {
   supabaseClient
     .channel("messages-room")
@@ -70,15 +78,15 @@ function subscribeRealtime() {
       { event: "INSERT", schema: "public", table: "messages" },
       payload => {
         addMessage(payload.new);
-        messagesBox.scrollTop = messagesBox.scrollHeight;
+        scrollBottom();
       }
     )
     .subscribe();
 }
 
-/* ADMIN WIPE */
-document.getElementById("wipe-btn").onclick = async () => {
-  if (!confirm("Delete all messages?")) return;
-  await supabaseClient.from("messages").delete().neq("id", 0);
-  location.reload();
-};
+/* SCROLL FIX */
+function scrollBottom() {
+  requestAnimationFrame(() => {
+    messagesBox.scrollTop = messagesBox.scrollHeight;
+  });
+}

@@ -24,7 +24,8 @@ const passInput = document.getElementById("pass-input");
 const messagesBox = document.getElementById("messages");
 const msgInput = document.getElementById("msg-input");
 
-let channel; // single persistent channel
+let channel = null;
+let isLoggedIn = false;
 
 /* LOGIN */
 document.getElementById("login-btn").onclick = () => {
@@ -33,6 +34,7 @@ document.getElementById("login-btn").onclick = () => {
     return;
   }
 
+  isLoggedIn = true;
   authOverlay.style.display = "none";
   chatContainer.style.display = "flex";
 
@@ -86,30 +88,18 @@ function addMessage(msg) {
   messagesBox.appendChild(div);
 }
 
-/* SEND */
+/* SEND MESSAGE */
 document.getElementById("send-btn").onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
   /* 🔥 SECRET DELETE COMMAND */
   if (text === DELETE_TRIGGER) {
-    const { error } = await supabaseClient
-      .from("messages")
-      .delete()
-      .neq("id", 0);
-
-    if (error) {
-      console.error("Delete error:", error.message);
-      alert("Delete failed");
-    } else {
-      messagesBox.innerHTML = "";
-    }
-
+    await wipeConversation();
     msgInput.value = "";
     return;
   }
 
-  /* NORMAL MESSAGE */
   const { error } = await supabaseClient
     .from("messages")
     .insert({ content: text });
@@ -122,6 +112,50 @@ document.getElementById("send-btn").onclick = async () => {
 
   msgInput.value = "";
 };
+
+/* AUTO WIPE + LOGOUT */
+async function wipeConversation() {
+  try {
+    await supabaseClient
+      .from("messages")
+      .delete()
+      .neq("id", 0);
+  } catch (e) {
+    console.error("Wipe failed");
+  }
+
+  messagesBox.innerHTML = "";
+}
+
+/* RESET SESSION */
+async function resetSession() {
+  if (!isLoggedIn) return;
+
+  await wipeConversation();
+
+  isLoggedIn = false;
+
+  if (channel) {
+    supabaseClient.removeChannel(channel);
+    channel = null;
+  }
+
+  chatContainer.style.display = "none";
+  authOverlay.style.display = "flex";
+  passInput.value = "";
+}
+
+/* VISIBILITY / BACKGROUND HANDLING */
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    resetSession();
+  }
+});
+
+/* TAB CLOSE / REFRESH (BEST EFFORT) */
+window.addEventListener("beforeunload", () => {
+  resetSession();
+});
 
 /* SCROLL FIX */
 function scrollBottom() {

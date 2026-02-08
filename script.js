@@ -7,7 +7,10 @@ const SECRET_PASS = "chamar";
 const WIPE_TRIGGER = "808801";
 /* ================== */
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
 
 /* ELEMENTS */
 const authOverlay = document.getElementById("auth-overlay");
@@ -44,11 +47,6 @@ function initRealtime() {
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages" },
       payload => {
-        if (payload.new.type === "wipe") {
-          hardReset();
-          return;
-        }
-
         addMessage(payload.new);
         scrollBottom();
       }
@@ -64,10 +62,7 @@ async function loadMessages() {
     .order("created_at");
 
   messagesBox.innerHTML = "";
-  data
-    .filter(m => m.type === "message")
-    .forEach(addMessage);
-
+  data.forEach(addMessage);
   scrollBottom();
 }
 
@@ -84,38 +79,38 @@ document.getElementById("send-btn").onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  // GLOBAL WIPE COMMAND
+  // 🔥 GLOBAL WIPE
   if (text === WIPE_TRIGGER) {
-    await supabaseClient.from("messages").insert({
-      type: "wipe",
-      content: ""
-    });
+    await supabaseClient.from("messages").delete().neq("id", 0);
+    messagesBox.innerHTML = "";
     msgInput.value = "";
     return;
   }
 
+  // Insert message
   await supabaseClient.from("messages").insert({
     content: text
+  });
+
+  // 🔔 TELEGRAM NOTIFICATION
+  fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+    },
+    body: JSON.stringify({})
   });
 
   msgInput.value = "";
 };
 
-/* HARD RESET (LOCAL + DB) */
-async function hardReset() {
-  messagesBox.innerHTML = "";
-
-  await supabaseClient
-    .from("messages")
-    .delete()
-    .neq("type", "wipe");
-
-  resetSession();
-}
-
 /* RESET SESSION */
-function resetSession() {
+async function resetSession() {
   if (!isLoggedIn) return;
+
+  await supabaseClient.from("messages").delete().neq("id", 0);
 
   isLoggedIn = false;
 
@@ -124,16 +119,19 @@ function resetSession() {
     channel = null;
   }
 
+  messagesBox.innerHTML = "";
   chatContainer.style.display = "none";
   authOverlay.style.display = "flex";
   passInput.value = "";
 }
 
-/* TAB / APP BACKGROUND */
+/* AUTO WIPE ON LEAVE */
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    supabaseClient.from("messages").insert({ type: "wipe" });
-  }
+  if (document.hidden) resetSession();
+});
+
+window.addEventListener("beforeunload", () => {
+  resetSession();
 });
 
 /* SCROLL */

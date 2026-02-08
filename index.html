@@ -2,32 +2,31 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Private Chat</title>
 
   <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- CSS -->
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
+<!-- AUTH -->
 <div id="auth-overlay">
   <h2>Enter Access Key</h2>
   <input type="password" id="pass-input" placeholder="Password">
   <button id="login-btn">Enter</button>
 </div>
 
+<!-- CHAT -->
 <div id="chat-container">
-  <header>
-    Private Room
-    <button class="admin-btn" id="wipe-btn">ADMIN WIPE</button>
+  <header id="header-text">
+    sankriti mujhe pehchano
   </header>
-
-  <div id="welcome-msg">
-    welcome sanskriti... mujhe pehchano...
-  </div>
 
   <div id="messages"></div>
 
@@ -37,7 +36,6 @@
   </div>
 </div>
 
-<!-- JS -->
 <script src="script.js"></script>
 </body>
 </html>

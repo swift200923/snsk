@@ -38,24 +38,31 @@ document.getElementById("login-btn").onclick = () => {
   authOverlay.style.display = "none";
   chatContainer.style.display = "flex";
 
-  initRealtime();   // subscribe first
-  loadMessages();   // then load history
+  initRealtime();
+  loadMessages();
 };
 
-/* INIT REALTIME (ONLY ONCE) */
+/* INIT REALTIME */
 function initRealtime() {
   if (channel) return;
 
   channel = supabaseClient
-    .channel("messages-realtime", {
-      config: { broadcast: { self: true } }
-    })
+    .channel("messages-realtime")
+    // INSERT
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages" },
       payload => {
         addMessage(payload.new);
         scrollBottom();
+      }
+    )
+    // DELETE (🔥 THIS IS THE FIX)
+    .on(
+      "postgres_changes",
+      { event: "DELETE", schema: "public", table: "messages" },
+      () => {
+        messagesBox.innerHTML = "";
       }
     )
     .subscribe(status => {
@@ -70,10 +77,7 @@ async function loadMessages() {
     .select("*")
     .order("created_at", { ascending: true });
 
-  if (error) {
-    console.error(error);
-    return;
-  }
+  if (error) return console.error(error);
 
   messagesBox.innerHTML = "";
   data.forEach(addMessage);
@@ -88,12 +92,12 @@ function addMessage(msg) {
   messagesBox.appendChild(div);
 }
 
-/* SEND MESSAGE */
+/* SEND */
 document.getElementById("send-btn").onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  /* 🔥 SECRET DELETE COMMAND */
+  // SECRET DELETE
   if (text === DELETE_TRIGGER) {
     await wipeConversation();
     msgInput.value = "";
@@ -105,15 +109,14 @@ document.getElementById("send-btn").onclick = async () => {
     .insert({ content: text });
 
   if (error) {
-    console.error("Insert error:", error.message);
+    console.error(error);
     alert("Message failed");
-    return;
   }
 
   msgInput.value = "";
 };
 
-/* AUTO WIPE + LOGOUT */
+/* WIPE (DB DELETE) */
 async function wipeConversation() {
   try {
     await supabaseClient
@@ -121,10 +124,8 @@ async function wipeConversation() {
       .delete()
       .neq("id", 0);
   } catch (e) {
-    console.error("Wipe failed");
+    console.error("Delete failed");
   }
-
-  messagesBox.innerHTML = "";
 }
 
 /* RESET SESSION */
@@ -145,19 +146,19 @@ async function resetSession() {
   passInput.value = "";
 }
 
-/* VISIBILITY / BACKGROUND HANDLING */
+/* TAB / APP BACKGROUND */
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     resetSession();
   }
 });
 
-/* TAB CLOSE / REFRESH (BEST EFFORT) */
+/* CLOSE / REFRESH */
 window.addEventListener("beforeunload", () => {
   resetSession();
 });
 
-/* SCROLL FIX */
+/* SCROLL */
 function scrollBottom() {
   requestAnimationFrame(() => {
     messagesBox.scrollTop = messagesBox.scrollHeight;

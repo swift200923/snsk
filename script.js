@@ -8,7 +8,11 @@ const ADMIN_TRIGGER = "add/adminamit808801";
 const supabaseClient = supabase.createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
-  { realtime: { params: { eventsPerSecond: 20 } } }
+  {
+    realtime: {
+      params: { eventsPerSecond: 50 }
+    }
+  }
 );
 
 /* ELEMENTS */
@@ -18,31 +22,61 @@ const passInput = document.getElementById("pass-input");
 const messagesBox = document.getElementById("messages");
 const msgInput = document.getElementById("msg-input");
 
+let channel; // IMPORTANT: single persistent channel
+
 /* LOGIN */
 document.getElementById("login-btn").onclick = () => {
-  if (passInput.value === SECRET_PASS) {
-    authOverlay.style.display = "none";
-    chatContainer.style.display = "flex";
-    loadMessages();
-    subscribeRealtime();
-  } else {
+  if (passInput.value !== SECRET_PASS) {
     alert("Wrong password");
+    return;
   }
+
+  authOverlay.style.display = "none";
+  chatContainer.style.display = "flex";
+
+  initRealtime();   // 🔥 subscribe FIRST
+  loadMessages();   // then load history
 };
 
-/* LOAD */
+/* INIT REALTIME (ONLY ONCE) */
+function initRealtime() {
+  if (channel) return; // prevents resubscribe bug
+
+  channel = supabaseClient
+    .channel("messages-realtime", {
+      config: { broadcast: { self: true } }
+    })
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "messages" },
+      payload => {
+        addMessage(payload.new);
+        scrollBottom();
+      }
+    )
+    .subscribe(status => {
+      console.log("Realtime status:", status);
+    });
+}
+
+/* LOAD HISTORY */
 async function loadMessages() {
-  const { data } = await supabaseClient
+  const { data, error } = await supabaseClient
     .from("messages")
     .select("*")
     .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error(error);
+    return;
+  }
 
   messagesBox.innerHTML = "";
   data.forEach(addMessage);
   scrollBottom();
 }
 
-/* ADD */
+/* ADD MESSAGE */
 function addMessage(msg) {
   const div = document.createElement("div");
   div.className = "msg";
@@ -55,7 +89,7 @@ document.getElementById("send-btn").onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  // ADMIN COMMAND (hidden)
+  // hidden admin
   if (text === ADMIN_TRIGGER) {
     if (confirm("ADMIN: Delete all messages?")) {
       await supabaseClient.from("messages").delete().neq("id", 0);
@@ -65,24 +99,18 @@ document.getElementById("send-btn").onclick = async () => {
     return;
   }
 
-  await supabaseClient.from("messages").insert({ content: text });
+  const { error } = await supabaseClient
+    .from("messages")
+    .insert({ content: text });
+
+  if (error) {
+    console.error("Insert error:", error.message);
+    alert("Message failed");
+    return;
+  }
+
   msgInput.value = "";
 };
-
-/* REALTIME (FAST) */
-function subscribeRealtime() {
-  supabaseClient
-    .channel("messages-room")
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "messages" },
-      payload => {
-        addMessage(payload.new);
-        scrollBottom();
-      }
-    )
-    .subscribe();
-}
 
 /* SCROLL FIX */
 function scrollBottom() {

@@ -1,131 +1,84 @@
-// 1. HARDCODED CONFIG (Root folder check)
+/* ===== CONFIG ===== */
+const SUPABASE_URL = "https://muheqytnxuhjokvjamgl.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aGVxeXRueHVoam9rdmphbWdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4NzY0NDEsImV4cCI6MjA3OTQ1MjQ0MX0.AzwDieQ_8SUCVqfJInydqQqT86_qBF5qUoSP56EMFUE";
+const SECRET_PASS = "chamar";
+/* ================== */
 
-const SB_URL = "https://muheqytnxuhjokvjamgl.supabase.co";
+const supabaseClient = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
 
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aGVxeXRueHVoam9rdmphbWdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4NzY0NDEsImV4cCI6MjA3OTQ1MjQ0MX0.AzwDieQ_8SUCVqfJInydqQqT86_qBF5qUoSP56EMFUE";
+/* ELEMENTS */
+const authOverlay = document.getElementById("auth-overlay");
+const chatContainer = document.getElementById("chat-container");
+const passInput = document.getElementById("pass-input");
+const messagesBox = document.getElementById("messages");
+const msgInput = document.getElementById("msg-input");
 
-const PASSWORD = "chamar"; 
+/* LOGIN */
+document.getElementById("login-btn").onclick = () => {
+  if (passInput.value === SECRET_PASS) {
+    authOverlay.style.display = "none";
+    chatContainer.style.display = "flex";
+    loadMessages();
+    subscribeRealtime();
+  } else {
+    alert("Wrong password");
+  }
+};
 
-
-
-let supabase;
-
-
-
-// 2. INITIALIZE IMMEDIATELY
-
-try {
-
-    if (typeof window.supabase === 'undefined') {
-
-        alert("CRITICAL ERROR: Supabase library not loaded! Check your internet or index.html script tag.");
-
-    } else {
-
-        supabase = window.supabase.createClient(SB_URL, SB_KEY);
-
-        console.log("Supabase initialized successfully");
-
-    }
-
-} catch (e) {
-
-    alert("Init Error: " + e.message);
-
-}
-
-
-
-// 3. THE LOGIN FUNCTION
-
-async function handleLogin() {
-
-    console.log("Login button clicked");
-
-    const inputField = document.getElementById('pass-input');
-
-    
-
-    if (!inputField) {
-
-        alert("Error: Cannot find input field 'pass-input'");
-
-        return;
-
-    }
-
-
-
-    const input = inputField.value.trim();
-
-    
-
-    if (input.toLowerCase() === PASSWORD.toLowerCase()) {
-
-        alert("Password correct! Switching UI..."); // This will tell us if logic works
-
-        document.getElementById('auth-screen').style.display = 'none';
-
-        document.getElementById('chat-ui').style.display = 'flex';
-
-        
-
-        // Start backend functions
-
-        loadMessages();
-
-        listenRealtime();
-
-    } else {
-
-        alert("Wrong Password! You entered: " + input);
-
-    }
-
-}
-
-
-
-// 4. LOAD MESSAGES
-
+/* LOAD MESSAGES */
 async function loadMessages() {
+  const { data, error } = await supabaseClient
+    .from("messages")
+    .select("*")
+    .order("created_at", { ascending: true });
 
-    try {
+  if (error) return console.error(error);
 
-        const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-
-        if (error) throw error;
-
-        if (data) {
-
-            const container = document.getElementById('messages');
-
-            container.innerHTML = '';
-
-            data.forEach(msg => {
-
-                const div = document.createElement('div');
-
-                div.className = 'msg';
-
-                div.textContent = msg.content;
-
-                container.appendChild(div);
-
-            });
-
-            container.scrollTop = container.scrollHeight;
-
-        }
-
-    } catch (err) {
-
-        alert("Database Load Error: " + err.message);
-
-    }
-
+  messagesBox.innerHTML = "";
+  data.forEach(addMessage);
+  messagesBox.scrollTop = messagesBox.scrollHeight;
 }
 
+/* ADD MESSAGE */
+function addMessage(msg) {
+  const div = document.createElement("div");
+  div.className = "msg";
+  div.textContent = msg.content;
+  messagesBox.appendChild(div);
+}
 
+/* SEND */
+document.getElementById("send-btn").onclick = async () => {
+  if (!msgInput.value) return;
 
-// ... (keep the rest of the functions same as before)
+  await supabaseClient.from("messages").insert({
+    content: msgInput.value
+  });
+
+  msgInput.value = "";
+};
+
+/* REALTIME */
+function subscribeRealtime() {
+  supabaseClient
+    .channel("messages-room")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "messages" },
+      payload => {
+        addMessage(payload.new);
+        messagesBox.scrollTop = messagesBox.scrollHeight;
+      }
+    )
+    .subscribe();
+}
+
+/* ADMIN WIPE */
+document.getElementById("wipe-btn").onclick = async () => {
+  if (!confirm("Delete all messages?")) return;
+  await supabaseClient.from("messages").delete().neq("id", 0);
+  location.reload();
+};

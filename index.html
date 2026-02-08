@@ -1,155 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Private Chat</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Private Chat</title>
 
-<!-- Supabase v2 -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<style>
-:root {
-  --whatsapp-bg: #e5ddd5;
-  --whatsapp-green: #075e54;
-  --user-msg: #dcf8c6;
-}
-
-body {
-  margin: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  font-family: Arial, sans-serif;
-  background: #ece5dd;
-}
-
-/* AUTH */
-#auth-overlay {
-  position: fixed;
-  inset: 0;
-  background: #075e54;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-#auth-overlay input {
-  padding: 10px;
-  border-radius: 6px;
-  border: none;
-  margin-top: 10px;
-}
-
-#auth-overlay button {
-  margin-top: 10px;
-  padding: 10px 20px;
-  border-radius: 20px;
-  border: none;
-  background: white;
-  color: #075e54;
-  cursor: pointer;
-}
-
-/* CHAT */
-#chat-container {
-  display: none;
-  flex-direction: column;
-  height: 100%;
-}
-
-header {
-  background: var(--whatsapp-green);
-  color: white;
-  padding: 15px;
-  text-align: center;
-  position: relative;
-}
-
-.admin-btn {
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  font-size: 10px;
-  background: rgba(255,255,255,0.2);
-  border: none;
-  color: white;
-  padding: 5px;
-  cursor: pointer;
-}
-
-#welcome-msg {
-  background: #fff3cd;
-  color: #856404;
-  padding: 8px;
-  font-size: 12px;
-  text-align: center;
-}
-
-#messages {
-  flex: 1;
-  padding: 15px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.msg {
-  max-width: 70%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: white;
-  align-self: flex-start;
-}
-
-.mine {
-  background: var(--user-msg);
-  align-self: flex-end;
-}
-
-.input-area {
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  background: #f0f0f0;
-}
-
-.input-area input {
-  flex: 1;
-  padding: 10px;
-  border-radius: 20px;
-  border: none;
-}
-
-.input-area button {
-  background: var(--whatsapp-green);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 20px;
-  cursor: pointer;
-}
-</style>
+  <!-- CSS -->
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
-<!-- AUTH -->
 <div id="auth-overlay">
   <h2>Enter Access Key</h2>
   <input type="password" id="pass-input" placeholder="Password">
-  <button onclick="checkPass()">Enter</button>
+  <button id="login-btn">Enter</button>
 </div>
 
-<!-- CHAT -->
 <div id="chat-container">
   <header>
     Private Room
-    <button class="admin-btn" onclick="clearAllChat()">ADMIN WIPE</button>
+    <button class="admin-btn" id="wipe-btn">ADMIN WIPE</button>
   </header>
 
   <div id="welcome-msg">
@@ -160,97 +33,11 @@ header {
 
   <div class="input-area">
     <input type="text" id="msg-input" placeholder="Type message">
-    <button onclick="sendMessage()">Send</button>
+    <button id="send-btn">Send</button>
   </div>
 </div>
 
-<script>
-/* ====== CONFIG (REPLACE THESE ONLY) ====== */
-const SUPABASE_URL = "https://muheqytnxuhjokvjamgl.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aGVxeXRueHVoam9rdmphbWdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4NzY0NDEsImV4cCI6MjA3OTQ1MjQ0MX0.AzwDieQ_8SUCVqfJInydqQqT86_qBF5qUoSP56EMFUE";
-const SECRET_PASS = "chamar";
-/* ======================================= */
-
-/* FIXED CLIENT */
-const supabaseClient = supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
-
-/* AUTH */
-function checkPass() {
-  const val = document.getElementById("pass-input").value;
-  if (val === SECRET_PASS) {
-    document.getElementById("auth-overlay").style.display = "none";
-    document.getElementById("chat-container").style.display = "flex";
-    loadMessages();
-    subscribeToMessages();
-  } else {
-    alert("Wrong password");
-  }
-}
-
-/* LOAD */
-async function loadMessages() {
-  const { data, error } = await supabaseClient
-    .from("messages")
-    .select("*")
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  const box = document.getElementById("messages");
-  box.innerHTML = "";
-  data.forEach(addMessage);
-  box.scrollTop = box.scrollHeight;
-}
-
-/* ADD MESSAGE */
-function addMessage(msg) {
-  const div = document.createElement("div");
-  div.className = "msg";
-  div.textContent = msg.content;
-  document.getElementById("messages").appendChild(div);
-}
-
-/* SEND */
-async function sendMessage() {
-  const input = document.getElementById("msg-input");
-  if (!input.value) return;
-
-  await supabaseClient.from("messages").insert({
-    content: input.value
-  });
-
-  input.value = "";
-}
-
-/* REALTIME */
-function subscribeToMessages() {
-  supabaseClient
-    .channel("messages-room")
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "messages" },
-      payload => {
-        addMessage(payload.new);
-        const box = document.getElementById("messages");
-        box.scrollTop = box.scrollHeight;
-      }
-    )
-    .subscribe();
-}
-
-/* ADMIN WIPE */
-async function clearAllChat() {
-  if (!confirm("Delete ALL messages?")) return;
-  await supabaseClient.from("messages").delete().neq("id", 0);
-  location.reload();
-}
-</script>
-
+<!-- JS -->
+<script src="script.js"></script>
 </body>
 </html>

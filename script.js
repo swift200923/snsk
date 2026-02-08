@@ -1,8 +1,10 @@
 /* ===== CONFIG ===== */
 const SUPABASE_URL = "https://fqubarbjmryjoqfexuqz.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdWJhcmJqbXJ5am9xZmV4dXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjQyNjUsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
-const SECRET_PASS = "chamar"; 
-const ADMIN_TRIGGER = "add/adminamit808801";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdWJhcmJqbXJ5am9xZmV4dXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjQyNjUsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
+
+const SECRET_PASS = "chamar";
+const DELETE_TRIGGER = "808801";
 /* ================== */
 
 const supabaseClient = supabase.createClient(
@@ -22,7 +24,7 @@ const passInput = document.getElementById("pass-input");
 const messagesBox = document.getElementById("messages");
 const msgInput = document.getElementById("msg-input");
 
-let channel; // IMPORTANT: single persistent channel
+let channel; // single persistent channel
 
 /* LOGIN */
 document.getElementById("login-btn").onclick = () => {
@@ -34,13 +36,13 @@ document.getElementById("login-btn").onclick = () => {
   authOverlay.style.display = "none";
   chatContainer.style.display = "flex";
 
-  initRealtime();   // 🔥 subscribe FIRST
+  initRealtime();   // subscribe first
   loadMessages();   // then load history
 };
 
 /* INIT REALTIME (ONLY ONCE) */
 function initRealtime() {
-  if (channel) return; // prevents resubscribe bug
+  if (channel) return;
 
   channel = supabaseClient
     .channel("messages-realtime", {
@@ -89,16 +91,25 @@ document.getElementById("send-btn").onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  // hidden admin
-  if (text === ADMIN_TRIGGER) {
-    if (confirm("ADMIN: Delete all messages?")) {
-      await supabaseClient.from("messages").delete().neq("id", 0);
+  /* 🔥 SECRET DELETE COMMAND */
+  if (text === DELETE_TRIGGER) {
+    const { error } = await supabaseClient
+      .from("messages")
+      .delete()
+      .neq("id", 0);
+
+    if (error) {
+      console.error("Delete error:", error.message);
+      alert("Delete failed");
+    } else {
       messagesBox.innerHTML = "";
     }
+
     msgInput.value = "";
     return;
   }
 
+  /* NORMAL MESSAGE */
   const { error } = await supabaseClient
     .from("messages")
     .insert({ content: text });

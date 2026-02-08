@@ -6,114 +6,94 @@
     <title>Private Chat</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --wa-green: #075e54; --wa-light: #dcf8c6; --bg: #e5ddd5; }
-        body { font-family: sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        #auth-screen { position: fixed; inset: 0; background: var(--wa-green); display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; z-index: 100; }
-        input[type="password"] { padding: 12px; border-radius: 25px; border: none; width: 250px; text-align: center; margin-bottom: 10px; font-size: 16px; }
-        #chat-ui { display: none; flex-direction: column; height: 100%; }
-        header { background: var(--wa-green); color: white; padding: 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
-        #welcome-banner { background: #fff3cd; padding: 10px; font-size: 13px; text-align: center; border-bottom: 1px solid #ffeeba; color: #856404; }
-        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
-        .msg { padding: 8px 12px; border-radius: 10px; background: white; max-width: 80%; align-self: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.1); word-wrap: break-word; }
-        .mine { align-self: flex-end; background: var(--wa-light); }
-        .footer { padding: 10px; background: #f0f0f0; display: flex; gap: 10px; align-items: center; }
-        #msg-input { flex: 1; padding: 12px; border-radius: 20px; border: 1px solid #ccc; outline: none; }
-        .send-btn { background: var(--wa-green); color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: bold; }
+        :root { --green: #075e54; --light: #dcf8c6; --bg: #e5ddd5; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        
+        /* Password Screen */
+        #auth { position: fixed; inset: 0; background: var(--green); display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; z-index: 100; }
+        #auth input { padding: 12px; border-radius: 20px; border: none; width: 200px; text-align: center; margin-bottom: 15px; }
+
+        /* Chat UI */
+        #ui { display: none; flex-direction: column; height: 100%; }
+        header { background: var(--green); color: white; padding: 15px; font-weight: bold; display: flex; justify-content: space-between; }
+        #banner { background: #fff3cd; padding: 10px; font-size: 12px; text-align: center; color: #856404; border-bottom: 1px solid #ffeeba; }
+        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { padding: 8px 12px; border-radius: 8px; background: white; max-width: 75%; align-self: flex-start; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+        .mine { align-self: flex-end; background: var(--light); }
+
+        .input-bar { padding: 10px; background: #f0f0f0; display: flex; gap: 10px; }
+        #msg-in { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ccc; outline: none; }
+        button { background: var(--green); color: white; border: none; padding: 10px 15px; border-radius: 20px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div id="auth-screen">
-    <h2>Private Entry</h2>
-    <input type="password" id="pass" placeholder="Enter password...">
-    <button class="send-btn" onclick="login()">Enter</button>
+<div id="auth">
+    <h2>Access Required</h2>
+    <input type="password" id="pass-field" placeholder="Enter Password">
+    <button onclick="check()">Enter</button>
 </div>
 
-<div id="chat-ui">
+<div id="ui">
     <header>
-        <span>Secure Chat</span>
-        <button style="background:red; color:white; border:none; padding:5px; border-radius:5px; font-size:10px;" onclick="wipeChat()">ADMIN: WIPE</button>
+        <span>Anonymous</span>
+        <button style="background:red; font-size:10px;" onclick="wipe()">Wipe Chat</button>
     </header>
-    <div id="welcome-banner">
-        welcome sanskriti...mujhe pehchano..aur tabhi message krna jab chhotu ghr pe nahi ho...
-    </div>
+    <div id="banner">welcome sanskriti...mujhe pehchano..aur tabhi message krna jab chhotu ghr pe nahi ho...</div>
     <div id="messages"></div>
-    <div class="footer">
-        <input type="text" id="msg-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') send()">
-        <button class="send-btn" onclick="send()">Send</button>
+    <div class="input-bar">
+        <input type="text" id="msg-in" placeholder="Type a message..." onkeypress="if(event.key==='Enter') send()">
+        <button onclick="send()">Send</button>
     </div>
 </div>
 
 <script>
-    // These get replaced by GitHub Actions
-    const SB_URL = "__SUPABASE_URL__";
-    const SB_KEY = "__SUPABASE_KEY__";
-    const APP_PASS = "__CHAT_PASSWORD__";
+    // FILL THESE THREE MANUALLY
+    const SB_URL = "https://muheqytnxuhjokvjamgl.supabase.co";
+    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aGVxeXRueHVoam9rdmphbWdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4NzY0NDEsImV4cCI6MjA3OTQ1MjQ0MX0.AzwDieQ_8SUCVqfJInydqQqT86_qBF5qUoSP56EMFUE";
+    const THE_PASS = "chamar"; 
 
-    let supabase;
+    const supabase = window.supabase.createClient(SB_URL, SB_KEY);
 
-    // 1. Initialize Supabase safely
-    try {
-        // Use the global object from the CDN
-        supabase = window.supabase.createClient(SB_URL, SB_KEY);
-    } catch (e) {
-        console.error("Initialization Error:", e);
+    function check() {
+        const input = document.getElementById('pass-field').value;
+        if(input.toLowerCase() === THE_PASS) {
+            document.getElementById('auth').style.display = 'none';
+            document.getElementById('ui').style.display = 'flex';
+            start();
+        } else { alert("Wrong!"); }
     }
 
-    // 2. Login Function
-    function login() {
-        const val = document.getElementById('pass').value.trim();
+    async function start() {
+        const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+        data?.forEach(add);
         
-        // Check if password matches (case insensitive)
-        if(val.toLowerCase() === APP_PASS.toLowerCase()) {
-            document.getElementById('auth-screen').style.display = 'none';
-            document.getElementById('chat-ui').style.display = 'flex';
-            initChat();
-        } else { 
-            alert("Wrong Password. Try again."); 
-        }
-    }
-
-    // 3. Load and Sync Messages
-    async function initChat() {
-        const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-        if (error) {
-            alert("Database Error: " + error.message);
-            return;
-        }
-        data.forEach(addMsg);
-        
-        // Real-time subscription
-        supabase.channel('room1').on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, payload => {
-            if(payload.eventType === 'INSERT') addMsg(payload.new);
+        supabase.channel('any').on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, payload => {
+            if(payload.eventType === 'INSERT') add(payload.new);
             if(payload.eventType === 'DELETE') location.reload();
         }).subscribe();
     }
 
-    function addMsg(m) {
-        const div = document.createElement('div');
-        div.className = 'msg';
-        div.textContent = m.content;
+    function add(m) {
+        const d = document.createElement('div');
+        d.className = 'msg';
+        d.textContent = m.content;
         const box = document.getElementById('messages');
-        box.appendChild(div);
+        box.appendChild(d);
         box.scrollTop = box.scrollHeight;
     }
 
     async function send() {
-        const el = document.getElementById('msg-input');
-        if(!el.value) return;
-        
-        const text = el.value;
-        el.value = ''; // Clear input immediately for better UX
-        
-        const { error } = await supabase.from('messages').insert([{ content: text }]);
-        if (error) alert("Send Failed: " + error.message);
+        const i = document.getElementById('msg-in');
+        if(!i.value) return;
+        const txt = i.value;
+        i.value = '';
+        await supabase.from('messages').insert([{ content: txt }]);
     }
 
-    async function wipeChat() {
-        if(confirm("Admin: This will delete ALL history. Proceed?")) {
-            const { error } = await supabase.from('messages').delete().neq('id', 0);
-            if(error) alert(error.message);
+    async function wipe() {
+        if(confirm("Delete all?")) {
+            await supabase.from('messages').delete().neq('id', 0);
         }
     }
 </script>

@@ -4,18 +4,10 @@ const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdWJhcmJqbXJ5am9xZmV4dXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjQyNjUsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
 
 const SECRET_PASS = "chamar";
-const DELETE_TRIGGER = "808801";
+const WIPE_TRIGGER = "808801";
 /* ================== */
 
-const supabaseClient = supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY,
-  {
-    realtime: {
-      params: { eventsPerSecond: 50 }
-    }
-  }
-);
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ELEMENTS */
 const authOverlay = document.getElementById("auth-overlay");
@@ -42,49 +34,44 @@ document.getElementById("login-btn").onclick = () => {
   loadMessages();
 };
 
-/* INIT REALTIME */
+/* REALTIME */
 function initRealtime() {
   if (channel) return;
 
   channel = supabaseClient
     .channel("messages-realtime")
-    // INSERT
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages" },
       payload => {
+        if (payload.new.type === "wipe") {
+          hardReset();
+          return;
+        }
+
         addMessage(payload.new);
         scrollBottom();
       }
     )
-    // DELETE (🔥 THIS IS THE FIX)
-    .on(
-      "postgres_changes",
-      { event: "DELETE", schema: "public", table: "messages" },
-      () => {
-        messagesBox.innerHTML = "";
-      }
-    )
-    .subscribe(status => {
-      console.log("Realtime status:", status);
-    });
+    .subscribe();
 }
 
-/* LOAD HISTORY */
+/* LOAD */
 async function loadMessages() {
-  const { data, error } = await supabaseClient
+  const { data } = await supabaseClient
     .from("messages")
     .select("*")
-    .order("created_at", { ascending: true });
-
-  if (error) return console.error(error);
+    .order("created_at");
 
   messagesBox.innerHTML = "";
-  data.forEach(addMessage);
+  data
+    .filter(m => m.type === "message")
+    .forEach(addMessage);
+
   scrollBottom();
 }
 
-/* ADD MESSAGE */
+/* ADD */
 function addMessage(msg) {
   const div = document.createElement("div");
   div.className = "msg";
@@ -97,42 +84,38 @@ document.getElementById("send-btn").onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  // SECRET DELETE
-  if (text === DELETE_TRIGGER) {
-    await wipeConversation();
+  // GLOBAL WIPE COMMAND
+  if (text === WIPE_TRIGGER) {
+    await supabaseClient.from("messages").insert({
+      type: "wipe",
+      content: ""
+    });
     msgInput.value = "";
     return;
   }
 
-  const { error } = await supabaseClient
-    .from("messages")
-    .insert({ content: text });
-
-  if (error) {
-    console.error(error);
-    alert("Message failed");
-  }
+  await supabaseClient.from("messages").insert({
+    content: text
+  });
 
   msgInput.value = "";
 };
 
-/* WIPE (DB DELETE) */
-async function wipeConversation() {
-  try {
-    await supabaseClient
-      .from("messages")
-      .delete()
-      .neq("id", 0);
-  } catch (e) {
-    console.error("Delete failed");
-  }
+/* HARD RESET (LOCAL + DB) */
+async function hardReset() {
+  messagesBox.innerHTML = "";
+
+  await supabaseClient
+    .from("messages")
+    .delete()
+    .neq("type", "wipe");
+
+  resetSession();
 }
 
 /* RESET SESSION */
-async function resetSession() {
+function resetSession() {
   if (!isLoggedIn) return;
-
-  await wipeConversation();
 
   isLoggedIn = false;
 
@@ -149,13 +132,8 @@ async function resetSession() {
 /* TAB / APP BACKGROUND */
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
-    resetSession();
+    supabaseClient.from("messages").insert({ type: "wipe" });
   }
-});
-
-/* CLOSE / REFRESH */
-window.addEventListener("beforeunload", () => {
-  resetSession();
 });
 
 /* SCROLL */

@@ -6,7 +6,7 @@ const SUPABASE_ANON_KEY =
 
 const SECRET_PASS = "dada";
 
-const supabaseClient = supabase.createClient(
+const supabase = supabase.createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY
 );
@@ -28,7 +28,6 @@ const msgInput = document.getElementById("msg-input");
 const sendBtn = document.getElementById("send-btn");
 
 let channel = null;
-let loggedIn = false;
 
 /* LOGIN */
 loginBtn.onclick = async () => {
@@ -37,7 +36,6 @@ loginBtn.onclick = async () => {
     return;
   }
 
-  loggedIn = true;
   authOverlay.style.display = "none";
   chatContainer.style.display = "flex";
 
@@ -49,8 +47,8 @@ loginBtn.onclick = async () => {
 function initRealtime() {
   if (channel) return;
 
-  channel = supabaseClient
-    .channel("messages-realtime")
+  channel = supabase
+    .channel("messages-room")
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages" },
@@ -64,7 +62,7 @@ function initRealtime() {
 
 /* LOAD */
 async function loadMessages() {
-  const { data, error } = await supabaseClient
+  const { data, error } = await supabase
     .from("messages")
     .select("*")
     .order("created_at");
@@ -92,12 +90,13 @@ sendBtn.onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  const { error } = await supabaseClient.from("messages").insert({
+  const { error } = await supabase.from("messages").insert({
     content: text,
     sender_id: senderId
   });
 
   if (error) {
+    alert("Message failed (DB blocked)");
     console.error(error);
     return;
   }
@@ -105,19 +104,17 @@ sendBtn.onclick = async () => {
   msgInput.value = "";
 };
 
-/* LOCK ONLY WHEN TAB REALLY HIDES */
+/* LOCK ON TAB HIDE ONLY */
 document.addEventListener("visibilitychange", () => {
-  if (!loggedIn) return;
   if (!document.hidden) return;
 
-  loggedIn = false;
   messagesBox.innerHTML = "";
   chatContainer.style.display = "none";
   authOverlay.style.display = "flex";
   passInput.value = "";
 
   if (channel) {
-    supabaseClient.removeChannel(channel);
+    supabase.removeChannel(channel);
     channel = null;
   }
 });

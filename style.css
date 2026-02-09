@@ -22,23 +22,6 @@ body {
   justify-content: center;
 }
 
-#auth-overlay input {
-  padding: 12px;
-  background: #111;
-  border: 1px solid #333;
-  color: white;
-  width: 220px;
-}
-
-#auth-overlay button {
-  margin-top: 12px;
-  padding: 10px 20px;
-  background: white;
-  color: black;
-  border: none;
-  cursor: pointer;
-}
-
 /* CHAT */
 #chat-container {
   display: none;
@@ -47,7 +30,6 @@ body {
   height: 100dvh;
 }
 
-/* HEADER */
 header {
   padding: 14px;
   text-align: center;
@@ -55,7 +37,6 @@ header {
   font-weight: 600;
 }
 
-/* MESSAGES */
 #messages {
   flex: 1;
   padding: 16px;
@@ -66,23 +47,31 @@ header {
 }
 
 .msg {
-  max-width: 75%;
+  max-width: 70%;
   padding: 10px 14px;
   background: #111;
   border: 1px solid #222;
   border-radius: 6px;
   font-size: 14px;
-  word-wrap: break-word;
 }
 
-/* INPUT FIXED */
+/* 👤 SIDES */
+.msg.mine {
+  align-self: flex-end;
+  background: #1b1b1b;
+  border-color: #444;
+}
+
+.msg.theirs {
+  align-self: flex-start;
+  opacity: 0.85;
+}
+
+/* INPUT */
 .input-area {
-  position: sticky;
-  bottom: 0;
   display: flex;
   gap: 10px;
   padding: 12px;
-  background: #000;
   border-top: 1px solid #222;
 }
 
@@ -95,7 +84,7 @@ header {
 }
 
 .input-area button {
-  padding: 12px 18px;
+  padding: 12px 16px;
   background: white;
   color: black;
   border: none;

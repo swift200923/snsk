@@ -32,6 +32,7 @@ const loginBtn = document.getElementById("login-btn");
 const sendBtn = document.getElementById("send-btn");
 
 let channel = null;
+let loggedIn = false;
 
 /* ================= LOGIN ================= */
 loginBtn.onclick = async () => {
@@ -42,12 +43,38 @@ loginBtn.onclick = async () => {
     return;
   }
 
+  loggedIn = true;
   authOverlay.style.display = "none";
   chatContainer.style.display = "flex";
 
   await loadMessages();
   initRealtime();
 };
+
+/* ================= LOCK ON TAB CHANGE ================= */
+function lockSession() {
+  if (!loggedIn) return;
+
+  loggedIn = false;
+
+  if (channel) {
+    supabaseClient.removeChannel(channel);
+    channel = null;
+  }
+
+  messagesBox.innerHTML = "";
+  chatContainer.style.display = "none";
+  authOverlay.style.display = "flex";
+  passInput.value = "";
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) lockSession();
+});
+
+window.addEventListener("beforeunload", () => {
+  lockSession();
+});
 
 /* ================= REALTIME ================= */
 function initRealtime() {
@@ -93,7 +120,9 @@ function renderMessage(msg) {
   if (msg.type === "audio") {
     const audio = document.createElement("audio");
     audio.controls = true;
+    audio.preload = "metadata";
     audio.src = msg.content;
+    audio.load(); // 🔥 fixes 00:00 bug
     div.appendChild(audio);
   } else {
     div.textContent = msg.content;
@@ -135,26 +164,36 @@ sendBtn.onclick = async () => {
   msgInput.value = "";
 };
 
-/* ================= VOICE NOTES ================= */
+/* ================= VOICE NOTES (FIXED) ================= */
 let recorder = null;
 let chunks = [];
 
 recordBtn.onclick = async () => {
   if (!recorder) {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    recorder = new MediaRecorder(stream);
 
-    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder = new MediaRecorder(stream, {
+      mimeType: "audio/webm;codecs=opus"
+    });
+
+    chunks = [];
+
+    recorder.ondataavailable = e => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
 
     recorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: "audio/webm" });
-      chunks = [];
+      const blob = new Blob(chunks, {
+        type: "audio/webm;codecs=opus"
+      });
 
       const fileName = `${Date.now()}-${senderId}.webm`;
 
       await supabaseClient.storage
         .from("voice-notes")
-        .upload(fileName, blob);
+        .upload(fileName, blob, {
+          contentType: "audio/webm"
+        });
 
       const { data } = supabaseClient.storage
         .from("voice-notes")

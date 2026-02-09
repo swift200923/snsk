@@ -21,9 +21,10 @@ const msgInput = document.getElementById("msg-input");
 
 let channel = null;
 let isLoggedIn = false;
+let firstMessageSent = false;
 
 /* LOGIN */
-document.getElementById("login-btn").onclick = () => {
+document.getElementById("login-btn").onclick = async () => {
   if (passInput.value !== SECRET_PASS) {
     alert("Wrong password");
     return;
@@ -33,8 +34,8 @@ document.getElementById("login-btn").onclick = () => {
   authOverlay.style.display = "none";
   chatContainer.style.display = "flex";
 
+  await loadMessages();
   initRealtime();
-  loadMessages();
 };
 
 /* REALTIME */
@@ -47,7 +48,18 @@ function initRealtime() {
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages" },
       payload => {
-        addMessage(payload.new);
+        const msg = payload.new;
+
+        // 🔥 GLOBAL WIPE COMMAND
+        if (msg.kind === "wipe") {
+          messagesBox.innerHTML = "";
+          return;
+        }
+
+        // system message (shown locally only)
+        if (msg.kind === "system") return;
+
+        addMessage(msg);
         scrollBottom();
       }
     )
@@ -62,11 +74,15 @@ async function loadMessages() {
     .order("created_at");
 
   messagesBox.innerHTML = "";
-  data.forEach(addMessage);
+
+  const userMessages = data.filter(m => m.kind === "user");
+  userMessages.forEach(addMessage);
+
+  firstMessageSent = userMessages.length > 0;
   scrollBottom();
 }
 
-/* ADD */
+/* ADD MESSAGE */
 function addMessage(msg) {
   const div = document.createElement("div");
   div.className = "msg";
@@ -74,25 +90,53 @@ function addMessage(msg) {
   messagesBox.appendChild(div);
 }
 
+/* SHOW ONE-TIME SYSTEM MESSAGE */
+function showWaitMessageOnce() {
+  const div = document.createElement("div");
+  div.className = "msg";
+  div.style.opacity = "0.6";
+  div.textContent = "wait for the Chamar";
+
+  messagesBox.appendChild(div);
+  scrollBottom();
+
+  setTimeout(() => {
+    div.remove();
+  }, 3000);
+}
+
 /* SEND */
 document.getElementById("send-btn").onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  // 🔥 GLOBAL WIPE
+  // 🔥 GLOBAL WIPE (SYNCED)
   if (text === WIPE_TRIGGER) {
+    await supabaseClient.from("messages").insert({
+      kind: "wipe",
+      content: ""
+    });
+
     await supabaseClient.from("messages").delete().neq("id", 0);
+
     messagesBox.innerHTML = "";
     msgInput.value = "";
     return;
   }
 
-  // Insert message
+  // 🔔 SHOW SYSTEM MESSAGE ONLY ON FIRST MESSAGE EVER
+  if (!firstMessageSent) {
+    showWaitMessageOnce();
+    firstMessageSent = true;
+  }
+
+  // Insert normal message
   await supabaseClient.from("messages").insert({
+    kind: "user",
     content: text
   });
 
-  // 🔔 TELEGRAM NOTIFICATION
+  // 🔔 TELEGRAM NOTIFICATION (UNCHANGED)
   fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
     method: "POST",
     headers: {
@@ -106,11 +150,9 @@ document.getElementById("send-btn").onclick = async () => {
   msgInput.value = "";
 };
 
-/* RESET SESSION */
-async function resetSession() {
+/* RESET SESSION (LOCAL ONLY) */
+function resetSession() {
   if (!isLoggedIn) return;
-
-  await supabaseClient.from("messages").delete().neq("id", 0);
 
   isLoggedIn = false;
 
@@ -125,7 +167,7 @@ async function resetSession() {
   passInput.value = "";
 }
 
-/* AUTO WIPE ON LEAVE */
+/* AUTO RESET ON LEAVE (NO GLOBAL DELETE HERE) */
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) resetSession();
 });

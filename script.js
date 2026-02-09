@@ -34,7 +34,7 @@ let channel = null;
 let loggedIn = false;
 
 /* ================= LOGIN ================= */
-loginBtn.addEventListener("click", async () => {
+loginBtn.onclick = async () => {
   const entered = passInput.value.trim().toLowerCase();
 
   if (entered !== SECRET_PASS.toLowerCase()) {
@@ -48,7 +48,7 @@ loginBtn.addEventListener("click", async () => {
 
   await loadMessages();
   initRealtime();
-});
+};
 
 /* ================= REALTIME ================= */
 function initRealtime() {
@@ -62,6 +62,7 @@ function initRealtime() {
       payload => {
         const msg = payload.new;
 
+        // 🔥 INSTANT GLOBAL WIPE
         if (msg.kind === "wipe") {
           messagesBox.innerHTML = "";
           return;
@@ -76,18 +77,12 @@ function initRealtime() {
 
 /* ================= LOAD ================= */
 async function loadMessages() {
-  const { data, error } = await supabaseClient
+  const { data } = await supabaseClient
     .from("messages")
     .select("*")
     .order("created_at");
 
-  if (error) {
-    console.error("Load error:", error);
-    return;
-  }
-
   messagesBox.innerHTML = "";
-  // Filter for user messages specifically as per your original logic
   data.filter(m => m.kind === "user").forEach(renderMessage);
   scrollBottom();
 }
@@ -101,64 +96,45 @@ function renderMessage(msg) {
 }
 
 /* ================= SEND ================= */
-async function sendMessage() {
+sendBtn.onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  // Handle Wipe Trigger
+  /* 🔥 GLOBAL WIPE — RELIABLE */
   if (text === WIPE_TRIGGER) {
+    // 1️⃣ notify everyone instantly
     await supabaseClient.from("messages").insert({ kind: "wipe" });
+
+    // 2️⃣ clean database silently
     await supabaseClient.from("messages").delete().neq("id", 0);
+
     messagesBox.innerHTML = "";
     msgInput.value = "";
     return;
   }
 
-  // Clear input immediately for better UX
-  msgInput.value = "";
-
-  const { error } = await supabaseClient.from("messages").insert({
+  await supabaseClient.from("messages").insert({
     kind: "user",
     type: "text",
     content: text,
     sender_id: senderId
   });
 
-  if (error) {
-    console.error("Insert error:", error);
-    return;
-  }
+  /* Telegram unchanged */
+  fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+    },
+    body: JSON.stringify({})
+  });
 
-  // Notification call (wrapped in try/catch to prevent breaking the flow)
-  try {
-    fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-      },
-      body: JSON.stringify({})
-    });
-  } catch (e) {
-    console.warn("Notification function failed or not found.");
-  }
-}
+  msgInput.value = "";
+};
 
-/* EVENT LISTENERS FOR SENDING */
-sendBtn.addEventListener("click", (e) => {
-  e.preventDefault();
-  sendMessage();
-});
-
-msgInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    sendMessage();
-  }
-});
-
-/* ================= LOCK SESSION ================= */
+/* ================= LOCK ON TAB CHANGE ================= */
 function lockSession() {
   if (!loggedIn) return;
 
@@ -180,6 +156,10 @@ document.addEventListener("visibilitychange", () => {
 });
 
 window.addEventListener("pagehide", () => {
+  lockSession();
+});
+
+window.addEventListener("blur", () => {
   lockSession();
 });
 

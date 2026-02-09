@@ -12,7 +12,7 @@ const supabaseClient = supabase.createClient(
   SUPABASE_ANON_KEY
 );
 
-/* SENDER ID (LOCAL ONLY) */
+/* LOCAL SENDER ID */
 let senderId = localStorage.getItem("sender_id");
 if (!senderId) {
   senderId = crypto.randomUUID();
@@ -26,7 +26,7 @@ const passInput = document.getElementById("pass-input");
 const messagesBox = document.getElementById("messages");
 const msgInput = document.getElementById("msg-input");
 
-let channel = null;
+let channel;
 
 /* LOGIN */
 document.getElementById("login-btn").onclick = async () => {
@@ -74,11 +74,7 @@ async function loadMessages() {
     .order("created_at");
 
   messagesBox.innerHTML = "";
-  data
-    .filter(m => m.kind === "user")
-    .forEach(renderMessage);
-
-  scrollBottom();
+  data.filter(m => m.kind === "user").forEach(renderMessage);
 }
 
 /* RENDER */
@@ -104,10 +100,7 @@ document.getElementById("send-btn").onclick = async () => {
   if (!text) return;
 
   if (text === WIPE_TRIGGER) {
-    await supabaseClient.from("messages").insert({
-      kind: "wipe",
-      content: ""
-    });
+    await supabaseClient.from("messages").insert({ kind: "wipe" });
     await supabaseClient.from("messages").delete().neq("id", 0);
     messagesBox.innerHTML = "";
     msgInput.value = "";
@@ -121,7 +114,6 @@ document.getElementById("send-btn").onclick = async () => {
     sender_id: senderId
   });
 
-  // Telegram trigger untouched
   fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
     method: "POST",
     headers: {
@@ -133,6 +125,41 @@ document.getElementById("send-btn").onclick = async () => {
   });
 
   msgInput.value = "";
+};
+
+/* 🎙 VOICE NOTES */
+let recorder;
+let chunks = [];
+
+document.getElementById("record-btn").onclick = async () => {
+  if (!recorder) {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = e => chunks.push(e.data);
+
+    recorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: "audio/webm" });
+      chunks = [];
+
+      const name = `${Date.now()}-${senderId}.webm`;
+      await supabaseClient.storage.from("voice-notes").upload(name, blob);
+      const { data } = supabaseClient.storage.from("voice-notes").getPublicUrl(name);
+
+      await supabaseClient.from("messages").insert({
+        kind: "user",
+        type: "audio",
+        content: data.publicUrl,
+        sender_id: senderId
+      });
+    };
+
+    recorder.start();
+    record-btn.textContent = "⏹";
+  } else {
+    recorder.stop();
+    recorder = null;
+    record-btn.textContent = "🎙";
+  }
 };
 
 /* SCROLL */

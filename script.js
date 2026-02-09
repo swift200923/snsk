@@ -34,7 +34,7 @@ let channel = null;
 let loggedIn = false;
 
 /* ================= LOGIN ================= */
-loginBtn.onclick = async () => {
+loginBtn.addEventListener("click", async () => {
   const entered = passInput.value.trim().toLowerCase();
 
   if (entered !== SECRET_PASS.toLowerCase()) {
@@ -48,7 +48,7 @@ loginBtn.onclick = async () => {
 
   await loadMessages();
   initRealtime();
-};
+});
 
 /* ================= REALTIME ================= */
 function initRealtime() {
@@ -62,7 +62,6 @@ function initRealtime() {
       payload => {
         const msg = payload.new;
 
-        // 🔥 INSTANT GLOBAL WIPE
         if (msg.kind === "wipe") {
           messagesBox.innerHTML = "";
           return;
@@ -77,10 +76,15 @@ function initRealtime() {
 
 /* ================= LOAD ================= */
 async function loadMessages() {
-  const { data } = await supabaseClient
+  const { data, error } = await supabaseClient
     .from("messages")
     .select("*")
     .order("created_at");
+
+  if (error) {
+    console.error("Load error:", error);
+    return;
+  }
 
   messagesBox.innerHTML = "";
   data.filter(m => m.kind === "user").forEach(renderMessage);
@@ -108,12 +112,17 @@ async function sendMessage() {
     return;
   }
 
-  await supabaseClient.from("messages").insert({
+  const { error } = await supabaseClient.from("messages").insert({
     kind: "user",
     type: "text",
     content: text,
     sender_id: senderId
   });
+
+  if (error) {
+    console.error("Insert error:", error);
+    return;
+  }
 
   fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
     method: "POST",
@@ -128,9 +137,9 @@ async function sendMessage() {
   msgInput.value = "";
 }
 
-sendBtn.onclick = sendMessage;
+sendBtn.addEventListener("click", sendMessage);
 
-/* ⌨️ ENTER TO SEND (DESKTOP) */
+/* ⌨️ ENTER KEY SEND */
 msgInput.addEventListener("keydown", e => {
   if (e.key === "Enter") {
     e.preventDefault();
@@ -155,7 +164,6 @@ function lockSession() {
   passInput.value = "";
 }
 
-/* 🔒 LOCK ONLY ON REAL EXIT / BACKGROUND */
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) lockSession();
 });

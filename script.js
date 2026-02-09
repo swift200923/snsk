@@ -25,12 +25,15 @@ const chatContainer = document.getElementById("chat-container");
 const passInput = document.getElementById("pass-input");
 const messagesBox = document.getElementById("messages");
 const msgInput = document.getElementById("msg-input");
+const recordBtn = document.getElementById("record-btn");
 
-let channel;
+let channel = null;
 
-/* LOGIN */
+/* ================= LOGIN ================= */
 document.getElementById("login-btn").onclick = async () => {
-  if (passInput.value !== SECRET_PASS) {
+  const entered = passInput.value.trim().toLowerCase();
+
+  if (entered !== SECRET_PASS.toLowerCase()) {
     alert("Wrong password");
     return;
   }
@@ -42,7 +45,7 @@ document.getElementById("login-btn").onclick = async () => {
   initRealtime();
 };
 
-/* REALTIME */
+/* ================= REALTIME ================= */
 function initRealtime() {
   if (channel) return;
 
@@ -66,18 +69,24 @@ function initRealtime() {
     .subscribe();
 }
 
-/* LOAD */
+/* ================= LOAD ================= */
 async function loadMessages() {
-  const { data } = await supabaseClient
+  const { data, error } = await supabaseClient
     .from("messages")
     .select("*")
     .order("created_at");
 
+  if (error) {
+    console.error(error);
+    return;
+  }
+
   messagesBox.innerHTML = "";
   data.filter(m => m.kind === "user").forEach(renderMessage);
+  scrollBottom();
 }
 
-/* RENDER */
+/* ================= RENDER ================= */
 function renderMessage(msg) {
   const div = document.createElement("div");
   div.className = "msg " + (msg.sender_id === senderId ? "mine" : "theirs");
@@ -94,11 +103,12 @@ function renderMessage(msg) {
   messagesBox.appendChild(div);
 }
 
-/* SEND TEXT */
+/* ================= SEND TEXT ================= */
 document.getElementById("send-btn").onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
+  /* GLOBAL WIPE */
   if (text === WIPE_TRIGGER) {
     await supabaseClient.from("messages").insert({ kind: "wipe" });
     await supabaseClient.from("messages").delete().neq("id", 0);
@@ -114,6 +124,7 @@ document.getElementById("send-btn").onclick = async () => {
     sender_id: senderId
   });
 
+  /* TELEGRAM NOTIFICATION (UNCHANGED) */
   fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
     method: "POST",
     headers: {
@@ -127,23 +138,30 @@ document.getElementById("send-btn").onclick = async () => {
   msgInput.value = "";
 };
 
-/* 🎙 VOICE NOTES */
-let recorder;
+/* ================= VOICE NOTES ================= */
+let recorder = null;
 let chunks = [];
 
-document.getElementById("record-btn").onclick = async () => {
+recordBtn.onclick = async () => {
   if (!recorder) {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     recorder = new MediaRecorder(stream);
+
     recorder.ondataavailable = e => chunks.push(e.data);
 
     recorder.onstop = async () => {
       const blob = new Blob(chunks, { type: "audio/webm" });
       chunks = [];
 
-      const name = `${Date.now()}-${senderId}.webm`;
-      await supabaseClient.storage.from("voice-notes").upload(name, blob);
-      const { data } = supabaseClient.storage.from("voice-notes").getPublicUrl(name);
+      const fileName = `${Date.now()}-${senderId}.webm`;
+
+      await supabaseClient.storage
+        .from("voice-notes")
+        .upload(fileName, blob);
+
+      const { data } = supabaseClient.storage
+        .from("voice-notes")
+        .getPublicUrl(fileName);
 
       await supabaseClient.from("messages").insert({
         kind: "user",
@@ -154,15 +172,15 @@ document.getElementById("record-btn").onclick = async () => {
     };
 
     recorder.start();
-    record-btn.textContent = "⏹";
+    recordBtn.textContent = "⏹";
   } else {
     recorder.stop();
     recorder = null;
-    record-btn.textContent = "🎙";
+    recordBtn.textContent = "🎙";
   }
 };
 
-/* SCROLL */
+/* ================= SCROLL ================= */
 function scrollBottom() {
   requestAnimationFrame(() => {
     messagesBox.scrollTop = messagesBox.scrollHeight;

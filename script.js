@@ -34,7 +34,7 @@ let channel = null;
 let loggedIn = false;
 
 /* ================= LOGIN ================= */
-loginBtn.onclick = async () => {
+loginBtn.addEventListener("click", async () => {
   const entered = passInput.value.trim().toLowerCase();
 
   if (entered !== SECRET_PASS.toLowerCase()) {
@@ -48,36 +48,6 @@ loginBtn.onclick = async () => {
 
   await loadMessages();
   initRealtime();
-};
-
-/* ================= HARD LOCK ================= */
-function lockSession(reason = "") {
-  if (!loggedIn) return;
-
-  loggedIn = false;
-
-  if (channel) {
-    supabaseClient.removeChannel(channel);
-    channel = null;
-  }
-
-  messagesBox.innerHTML = "";
-  chatContainer.style.display = "none";
-  authOverlay.style.display = "flex";
-  passInput.value = "";
-}
-
-/* 🔒 ALL RELIABLE LOCK EVENTS */
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) lockSession("visibilitychange");
-});
-
-window.addEventListener("pagehide", () => {
-  lockSession("pagehide");
-});
-
-window.addEventListener("blur", () => {
-  lockSession("blur");
 });
 
 /* ================= REALTIME ================= */
@@ -106,10 +76,15 @@ function initRealtime() {
 
 /* ================= LOAD ================= */
 async function loadMessages() {
-  const { data } = await supabaseClient
+  const { data, error } = await supabaseClient
     .from("messages")
     .select("*")
     .order("created_at");
+
+  if (error) {
+    console.error(error);
+    return;
+  }
 
   messagesBox.innerHTML = "";
   data.filter(m => m.kind === "user").forEach(renderMessage);
@@ -125,7 +100,7 @@ function renderMessage(msg) {
 }
 
 /* ================= SEND ================= */
-sendBtn.onclick = async () => {
+async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
 
@@ -137,12 +112,17 @@ sendBtn.onclick = async () => {
     return;
   }
 
-  await supabaseClient.from("messages").insert({
+  const { error } = await supabaseClient.from("messages").insert({
     kind: "user",
     type: "text",
     content: text,
     sender_id: senderId
   });
+
+  if (error) {
+    console.error("Insert error:", error);
+    return;
+  }
 
   fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
     method: "POST",
@@ -155,7 +135,43 @@ sendBtn.onclick = async () => {
   });
 
   msgInput.value = "";
-};
+}
+
+sendBtn.addEventListener("click", sendMessage);
+
+/* ⌨️ ENTER = SEND (DESKTOP) */
+msgInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+/* ================= LOCK (SAFE ONLY) ================= */
+function lockSession() {
+  if (!loggedIn) return;
+
+  loggedIn = false;
+
+  if (channel) {
+    supabaseClient.removeChannel(channel);
+    channel = null;
+  }
+
+  messagesBox.innerHTML = "";
+  chatContainer.style.display = "none";
+  authOverlay.style.display = "flex";
+  passInput.value = "";
+}
+
+/* 🔒 LOCK ONLY WHEN TAB IS ACTUALLY LEFT */
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) lockSession();
+});
+
+window.addEventListener("pagehide", () => {
+  lockSession();
+});
 
 /* ================= SCROLL ================= */
 function scrollBottom() {

@@ -1,3 +1,5 @@
+document.addEventListener("DOMContentLoaded", () => {
+
 /* ===== CONFIG ===== */
 const SUPABASE_URL = "https://fqubarbjmryjoqfexuqz.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -26,11 +28,13 @@ const passInput = document.getElementById("pass-input");
 const messagesBox = document.getElementById("messages");
 const msgInput = document.getElementById("msg-input");
 const recordBtn = document.getElementById("record-btn");
+const loginBtn = document.getElementById("login-btn");
+const sendBtn = document.getElementById("send-btn");
 
 let channel = null;
 
 /* ================= LOGIN ================= */
-document.getElementById("login-btn").onclick = async () => {
+loginBtn.onclick = async () => {
   const entered = passInput.value.trim().toLowerCase();
 
   if (entered !== SECRET_PASS.toLowerCase()) {
@@ -71,15 +75,10 @@ function initRealtime() {
 
 /* ================= LOAD ================= */
 async function loadMessages() {
-  const { data, error } = await supabaseClient
+  const { data } = await supabaseClient
     .from("messages")
     .select("*")
     .order("created_at");
-
-  if (error) {
-    console.error(error);
-    return;
-  }
 
   messagesBox.innerHTML = "";
   data.filter(m => m.kind === "user").forEach(renderMessage);
@@ -104,11 +103,10 @@ function renderMessage(msg) {
 }
 
 /* ================= SEND TEXT ================= */
-document.getElementById("send-btn").onclick = async () => {
+sendBtn.onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  /* GLOBAL WIPE */
   if (text === WIPE_TRIGGER) {
     await supabaseClient.from("messages").insert({ kind: "wipe" });
     await supabaseClient.from("messages").delete().neq("id", 0);
@@ -124,7 +122,6 @@ document.getElementById("send-btn").onclick = async () => {
     sender_id: senderId
   });
 
-  /* TELEGRAM NOTIFICATION (UNCHANGED) */
   fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
     method: "POST",
     headers: {
@@ -186,3 +183,5 @@ function scrollBottom() {
     messagesBox.scrollTop = messagesBox.scrollHeight;
   });
 }
+
+});

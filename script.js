@@ -96,18 +96,13 @@ function renderMessage(msg) {
 }
 
 /* ================= SEND ================= */
-sendBtn.onclick = async () => {
+async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  /* 🔥 GLOBAL WIPE — RELIABLE */
   if (text === WIPE_TRIGGER) {
-    // 1️⃣ notify everyone instantly
     await supabaseClient.from("messages").insert({ kind: "wipe" });
-
-    // 2️⃣ clean database silently
     await supabaseClient.from("messages").delete().neq("id", 0);
-
     messagesBox.innerHTML = "";
     msgInput.value = "";
     return;
@@ -120,7 +115,6 @@ sendBtn.onclick = async () => {
     sender_id: senderId
   });
 
-  /* Telegram unchanged */
   fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
     method: "POST",
     headers: {
@@ -132,9 +126,19 @@ sendBtn.onclick = async () => {
   });
 
   msgInput.value = "";
-};
+}
 
-/* ================= LOCK ON TAB CHANGE ================= */
+sendBtn.onclick = sendMessage;
+
+/* ⌨️ ENTER TO SEND (DESKTOP) */
+msgInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+/* ================= LOCK SESSION ================= */
 function lockSession() {
   if (!loggedIn) return;
 
@@ -151,15 +155,12 @@ function lockSession() {
   passInput.value = "";
 }
 
+/* 🔒 LOCK ONLY ON REAL EXIT / BACKGROUND */
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) lockSession();
 });
 
 window.addEventListener("pagehide", () => {
-  lockSession();
-});
-
-window.addEventListener("blur", () => {
   lockSession();
 });
 

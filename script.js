@@ -14,7 +14,7 @@ const supabaseClient = supabase.createClient(
   SUPABASE_ANON_KEY
 );
 
-/* LOCAL SENDER ID */
+/* LOCAL SENDER ID (for left/right messages) */
 let senderId = localStorage.getItem("sender_id");
 if (!senderId) {
   senderId = crypto.randomUUID();
@@ -27,7 +27,6 @@ const chatContainer = document.getElementById("chat-container");
 const passInput = document.getElementById("pass-input");
 const messagesBox = document.getElementById("messages");
 const msgInput = document.getElementById("msg-input");
-const recordBtn = document.getElementById("record-btn");
 const loginBtn = document.getElementById("login-btn");
 const sendBtn = document.getElementById("send-btn");
 
@@ -51,7 +50,7 @@ loginBtn.onclick = async () => {
   initRealtime();
 };
 
-/* ================= LOCK ON TAB CHANGE ================= */
+/* ================= LOCK SESSION ================= */
 function lockSession() {
   if (!loggedIn) return;
 
@@ -68,6 +67,7 @@ function lockSession() {
   passInput.value = "";
 }
 
+/* 🔒 Lock on any tab movement */
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) lockSession();
 });
@@ -102,10 +102,15 @@ function initRealtime() {
 
 /* ================= LOAD ================= */
 async function loadMessages() {
-  const { data } = await supabaseClient
+  const { data, error } = await supabaseClient
     .from("messages")
     .select("*")
     .order("created_at");
+
+  if (error) {
+    console.error(error);
+    return;
+  }
 
   messagesBox.innerHTML = "";
   data.filter(m => m.kind === "user").forEach(renderMessage);
@@ -116,26 +121,16 @@ async function loadMessages() {
 function renderMessage(msg) {
   const div = document.createElement("div");
   div.className = "msg " + (msg.sender_id === senderId ? "mine" : "theirs");
-
-  if (msg.type === "audio") {
-    const audio = document.createElement("audio");
-    audio.controls = true;
-    audio.preload = "metadata";
-    audio.src = msg.content;
-    audio.load(); // 🔥 fixes 00:00 bug
-    div.appendChild(audio);
-  } else {
-    div.textContent = msg.content;
-  }
-
+  div.textContent = msg.content;
   messagesBox.appendChild(div);
 }
 
-/* ================= SEND TEXT ================= */
+/* ================= SEND ================= */
 sendBtn.onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
+  /* 🔥 GLOBAL WIPE */
   if (text === WIPE_TRIGGER) {
     await supabaseClient.from("messages").insert({ kind: "wipe" });
     await supabaseClient.from("messages").delete().neq("id", 0);
@@ -151,6 +146,7 @@ sendBtn.onclick = async () => {
     sender_id: senderId
   });
 
+  /* 🔔 TELEGRAM NOTIFICATION (UNCHANGED) */
   fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
     method: "POST",
     headers: {
@@ -162,58 +158,6 @@ sendBtn.onclick = async () => {
   });
 
   msgInput.value = "";
-};
-
-/* ================= VOICE NOTES (FIXED) ================= */
-let recorder = null;
-let chunks = [];
-
-recordBtn.onclick = async () => {
-  if (!recorder) {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-    recorder = new MediaRecorder(stream, {
-      mimeType: "audio/webm;codecs=opus"
-    });
-
-    chunks = [];
-
-    recorder.ondataavailable = e => {
-      if (e.data.size > 0) chunks.push(e.data);
-    };
-
-    recorder.onstop = async () => {
-      const blob = new Blob(chunks, {
-        type: "audio/webm;codecs=opus"
-      });
-
-      const fileName = `${Date.now()}-${senderId}.webm`;
-
-      await supabaseClient.storage
-        .from("voice-notes")
-        .upload(fileName, blob, {
-          contentType: "audio/webm"
-        });
-
-      const { data } = supabaseClient.storage
-        .from("voice-notes")
-        .getPublicUrl(fileName);
-
-      await supabaseClient.from("messages").insert({
-        kind: "user",
-        type: "audio",
-        content: data.publicUrl,
-        sender_id: senderId
-      });
-    };
-
-    recorder.start();
-    recordBtn.textContent = "⏹";
-  } else {
-    recorder.stop();
-    recorder = null;
-    recordBtn.textContent = "🎙";
-  }
 };
 
 /* ================= SCROLL ================= */

@@ -1,43 +1,38 @@
 document.addEventListener("DOMContentLoaded", () => {
 
-/* ===== CONFIG ===== */
 const SUPABASE_URL = "https://fqubarbjmryjoqfexuqz.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
 
 const SECRET_PASS = "dada";
-const WIPE_TRIGGER = "808801";
-/* ================== */
 
 const supabaseClient = supabase.createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY
 );
 
-/* LOCAL SENDER ID */
+/* sender id */
 let senderId = localStorage.getItem("sender_id");
 if (!senderId) {
   senderId = crypto.randomUUID();
   localStorage.setItem("sender_id", senderId);
 }
 
-/* ELEMENTS */
+/* elements */
 const authOverlay = document.getElementById("auth-overlay");
 const chatContainer = document.getElementById("chat-container");
 const passInput = document.getElementById("pass-input");
+const loginBtn = document.getElementById("login-btn");
 const messagesBox = document.getElementById("messages");
 const msgInput = document.getElementById("msg-input");
-const loginBtn = document.getElementById("login-btn");
 const sendBtn = document.getElementById("send-btn");
 
 let channel = null;
 let loggedIn = false;
 
-/* ================= LOGIN ================= */
-loginBtn.addEventListener("click", async () => {
-  const entered = passInput.value.trim().toLowerCase();
-
-  if (entered !== SECRET_PASS.toLowerCase()) {
+/* LOGIN */
+loginBtn.onclick = async () => {
+  if (passInput.value.trim() !== SECRET_PASS) {
     alert("Wrong password");
     return;
   }
@@ -48,9 +43,9 @@ loginBtn.addEventListener("click", async () => {
 
   await loadMessages();
   initRealtime();
-});
+};
 
-/* ================= REALTIME ================= */
+/* REALTIME */
 function initRealtime() {
   if (channel) return;
 
@@ -60,21 +55,14 @@ function initRealtime() {
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages" },
       payload => {
-        const msg = payload.new;
-
-        if (msg.kind === "wipe") {
-          messagesBox.innerHTML = "";
-          return;
-        }
-
-        renderMessage(msg);
+        renderMessage(payload.new);
         scrollBottom();
       }
     )
     .subscribe();
 }
 
-/* ================= LOAD ================= */
+/* LOAD */
 async function loadMessages() {
   const { data, error } = await supabaseClient
     .from("messages")
@@ -87,11 +75,11 @@ async function loadMessages() {
   }
 
   messagesBox.innerHTML = "";
-  data.filter(m => m.kind === "user").forEach(renderMessage);
+  data.forEach(renderMessage);
   scrollBottom();
 }
 
-/* ================= RENDER ================= */
+/* RENDER */
 function renderMessage(msg) {
   const div = document.createElement("div");
   div.className = "msg " + (msg.sender_id === senderId ? "mine" : "theirs");
@@ -99,85 +87,44 @@ function renderMessage(msg) {
   messagesBox.appendChild(div);
 }
 
-/* ================= SEND ================= */
-async function sendMessage() {
+/* SEND (BUTTON ONLY) */
+sendBtn.onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  if (text === WIPE_TRIGGER) {
-    await supabaseClient.from("messages").insert({ kind: "wipe" });
-    await supabaseClient.from("messages").delete().neq("id", 0);
-    messagesBox.innerHTML = "";
-    msgInput.value = "";
-    return;
-  }
-
   const { error } = await supabaseClient.from("messages").insert({
-    kind: "user",
-    type: "text",
     content: text,
     sender_id: senderId
   });
 
   if (error) {
-    console.error("Insert error:", error);
+    console.error(error);
     return;
   }
 
-  fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-    },
-    body: JSON.stringify({})
-  });
-
   msgInput.value = "";
-}
+};
 
-sendBtn.addEventListener("click", sendMessage);
-
-/* ⌨️ ENTER = SEND (DESKTOP) */
-msgInput.addEventListener("keydown", e => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    sendMessage();
-  }
-});
-
-/* ================= LOCK (SAFE ONLY) ================= */
-function lockSession() {
+/* LOCK ONLY WHEN TAB REALLY HIDES */
+document.addEventListener("visibilitychange", () => {
   if (!loggedIn) return;
+  if (!document.hidden) return;
 
   loggedIn = false;
+  messagesBox.innerHTML = "";
+  chatContainer.style.display = "none";
+  authOverlay.style.display = "flex";
+  passInput.value = "";
 
   if (channel) {
     supabaseClient.removeChannel(channel);
     channel = null;
   }
-
-  messagesBox.innerHTML = "";
-  chatContainer.style.display = "none";
-  authOverlay.style.display = "flex";
-  passInput.value = "";
-}
-
-/* 🔒 LOCK ONLY WHEN TAB IS ACTUALLY LEFT */
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) lockSession();
 });
 
-window.addEventListener("pagehide", () => {
-  lockSession();
-});
-
-/* ================= SCROLL ================= */
+/* scroll */
 function scrollBottom() {
-  requestAnimationFrame(() => {
-    messagesBox.scrollTop = messagesBox.scrollHeight;
-  });
+  messagesBox.scrollTop = messagesBox.scrollHeight;
 }
 
 });

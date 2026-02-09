@@ -87,6 +87,7 @@ async function loadMessages() {
   }
 
   messagesBox.innerHTML = "";
+  // Filter for user messages specifically as per your original logic
   data.filter(m => m.kind === "user").forEach(renderMessage);
   scrollBottom();
 }
@@ -104,6 +105,7 @@ async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
 
+  // Handle Wipe Trigger
   if (text === WIPE_TRIGGER) {
     await supabaseClient.from("messages").insert({ kind: "wipe" });
     await supabaseClient.from("messages").delete().neq("id", 0);
@@ -111,6 +113,9 @@ async function sendMessage() {
     msgInput.value = "";
     return;
   }
+
+  // Clear input immediately for better UX
+  msgInput.value = "";
 
   const { error } = await supabaseClient.from("messages").insert({
     kind: "user",
@@ -124,23 +129,29 @@ async function sendMessage() {
     return;
   }
 
-  fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-    },
-    body: JSON.stringify({})
-  });
-
-  msgInput.value = "";
+  // Notification call (wrapped in try/catch to prevent breaking the flow)
+  try {
+    fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({})
+    });
+  } catch (e) {
+    console.warn("Notification function failed or not found.");
+  }
 }
 
-sendBtn.addEventListener("click", sendMessage);
+/* EVENT LISTENERS FOR SENDING */
+sendBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  sendMessage();
+});
 
-/* ⌨️ ENTER KEY SEND */
-msgInput.addEventListener("keydown", e => {
+msgInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     sendMessage();

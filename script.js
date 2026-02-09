@@ -50,6 +50,36 @@ loginBtn.onclick = async () => {
   initRealtime();
 };
 
+/* ================= HARD LOCK ================= */
+function lockSession(reason = "") {
+  if (!loggedIn) return;
+
+  loggedIn = false;
+
+  if (channel) {
+    supabaseClient.removeChannel(channel);
+    channel = null;
+  }
+
+  messagesBox.innerHTML = "";
+  chatContainer.style.display = "none";
+  authOverlay.style.display = "flex";
+  passInput.value = "";
+}
+
+/* 🔒 ALL RELIABLE LOCK EVENTS */
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) lockSession("visibilitychange");
+});
+
+window.addEventListener("pagehide", () => {
+  lockSession("pagehide");
+});
+
+window.addEventListener("blur", () => {
+  lockSession("blur");
+});
+
 /* ================= REALTIME ================= */
 function initRealtime() {
   if (channel) return;
@@ -62,7 +92,6 @@ function initRealtime() {
       payload => {
         const msg = payload.new;
 
-        // 🔥 INSTANT GLOBAL WIPE
         if (msg.kind === "wipe") {
           messagesBox.innerHTML = "";
           return;
@@ -100,14 +129,9 @@ sendBtn.onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  /* 🔥 GLOBAL WIPE — RELIABLE */
   if (text === WIPE_TRIGGER) {
-    // 1️⃣ notify everyone instantly
     await supabaseClient.from("messages").insert({ kind: "wipe" });
-
-    // 2️⃣ clean database silently
     await supabaseClient.from("messages").delete().neq("id", 0);
-
     messagesBox.innerHTML = "";
     msgInput.value = "";
     return;
@@ -120,7 +144,6 @@ sendBtn.onclick = async () => {
     sender_id: senderId
   });
 
-  /* Telegram unchanged */
   fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
     method: "POST",
     headers: {
@@ -133,35 +156,6 @@ sendBtn.onclick = async () => {
 
   msgInput.value = "";
 };
-
-/* ================= LOCK ON TAB CHANGE ================= */
-function lockSession() {
-  if (!loggedIn) return;
-
-  loggedIn = false;
-
-  if (channel) {
-    supabaseClient.removeChannel(channel);
-    channel = null;
-  }
-
-  messagesBox.innerHTML = "";
-  chatContainer.style.display = "none";
-  authOverlay.style.display = "flex";
-  passInput.value = "";
-}
-
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) lockSession();
-});
-
-window.addEventListener("pagehide", () => {
-  lockSession();
-});
-
-window.addEventListener("blur", () => {
-  lockSession();
-});
 
 /* ================= SCROLL ================= */
 function scrollBottom() {

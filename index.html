@@ -2,40 +2,179 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>gaming console</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  />
+
+  <!-- 🔐 PASSWORD HINT IS HERE -->
+  <title>
+    Chat Console
+  </title>
 
   <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <!-- Retro / minimal font -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap"
+    rel="stylesheet"
+  />
 
-  <link rel="stylesheet" href="style.css">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      height: 100dvh;
+      background: #000;
+      color: #fff;
+      font-family: "JetBrains Mono", monospace;
+      display: flex;
+    }
+
+    /* AUTH */
+    #auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    #auth-overlay h2 {
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    #auth-overlay p {
+      font-size: 12px;
+      opacity: 0.6;
+      text-align: center;
+      max-width: 260px;
+    }
+
+    #auth-overlay input {
+      padding: 12px;
+      background: #111;
+      border: 1px solid #333;
+      color: white;
+      width: 220px;
+      text-align: center;
+    }
+
+    #auth-overlay button {
+      padding: 10px 20px;
+      background: white;
+      color: black;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    /* CHAT */
+    #chat-container {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      height: 100dvh;
+    }
+
+    header {
+      padding: 14px;
+      text-align: center;
+      border-bottom: 1px solid #222;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+    }
+
+    #messages {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .msg {
+      max-width: 75%;
+      padding: 10px 14px;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 6px;
+      font-size: 14px;
+      word-wrap: break-word;
+    }
+
+    .input-area {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      gap: 10px;
+      padding: 12px;
+      background: #000;
+      border-top: 1px solid #222;
+    }
+
+    .input-area input {
+      flex: 1;
+      padding: 12px;
+      background: #111;
+      border: 1px solid #333;
+      color: white;
+    }
+
+    .input-area button {
+      padding: 12px 18px;
+      background: white;
+      color: black;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+  </style>
 </head>
+
 <body>
+  <!-- AUTH -->
+  <div id="auth-overlay">
+    <h2>mujhe pehchano</h2>
 
-<!-- AUTH -->
-<div id="auth-overlay">
-  <h2>Enter Password</h2>
-  <input type="password" id="pass-input" placeholder="Password">
-  <button id="login-btn">Enter</button>
-</div>
+    <!-- 🔐 PASSWORD HINT TEXT -->
+    <p>
+      Password is Title.<br />
+      (ch****)
+    </p>
 
-<!-- CHAT -->
-<div id="chat-container">
-  <header id="header-text">
-    mujhe pehchano
-  </header>
-
-  <div id="messages"></div>
-
-  <div class="input-area">
-    <input type="text" id="msg-input" placeholder="Type message">
-    <button id="send-btn">Send</button>
+    <input
+      type="password"
+      id="pass-input"
+      placeholder="Enter what you know"
+    />
+    <button id="login-btn">Enter</button>
   </div>
-</div>
 
-<script src="script.js"></script>
+  <!-- CHAT -->
+  <div id="chat-container">
+    <header>
+      pehchano 
+    </header>
+
+    <div id="messages"></div>
+
+    <div class="input-area">
+      <input type="text" id="msg-input" placeholder="Type message…" />
+      <button id="send-btn">Send</button>
+    </div>
+  </div>
+
+  <!-- Your script.js -->
+  <script src="script.js"></script>
 </body>
 </html>

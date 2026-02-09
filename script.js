@@ -3,7 +3,7 @@ const SUPABASE_URL = "https://fqubarbjmryjoqfexuqz.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdWJhcmJqbXJ5am9xZmV4dXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjQyNjUsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
 
-const SECRET_PASS = "chamar";
+const SECRET_PASS = "red";
 const WIPE_TRIGGER = "808801";
 /* ================== */
 

@@ -1,10 +1,10 @@
-document.addEventListener("DOMContentLoaded", () => {
-
+/* ===== CONFIG ===== */
 const SUPABASE_URL = "https://fqubarbjmryjoqfexuqz.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
 
 const SECRET_PASS = "dada";
+/* ================== */
 
 const supabase = supabase.createClient(
   SUPABASE_URL,
@@ -31,6 +31,8 @@ let channel = null;
 
 /* LOGIN */
 loginBtn.onclick = async () => {
+  console.log("Login clicked");
+
   if (passInput.value.trim() !== SECRET_PASS) {
     alert("Wrong password");
     return;
@@ -53,6 +55,7 @@ function initRealtime() {
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages" },
       payload => {
+        console.log("Realtime message:", payload.new);
         renderMessage(payload.new);
         scrollBottom();
       }
@@ -68,7 +71,7 @@ async function loadMessages() {
     .order("created_at");
 
   if (error) {
-    console.error(error);
+    console.error("Load error:", error);
     return;
   }
 
@@ -90,21 +93,23 @@ sendBtn.onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
+  console.log("Sending:", text);
+
   const { error } = await supabase.from("messages").insert({
     content: text,
     sender_id: senderId
   });
 
   if (error) {
-    alert("Message failed (DB blocked)");
-    console.error(error);
+    console.error("Insert failed:", error);
+    alert("Insert failed – check console");
     return;
   }
 
   msgInput.value = "";
 };
 
-/* LOCK ON TAB HIDE ONLY */
+/* LOCK ONLY ON TAB HIDE */
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) return;
 
@@ -123,5 +128,3 @@ document.addEventListener("visibilitychange", () => {
 function scrollBottom() {
   messagesBox.scrollTop = messagesBox.scrollHeight;
 }
-
-});

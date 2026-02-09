@@ -1,39 +1,36 @@
 /* ===== CONFIG ===== */
 const SUPABASE_URL = "https://fqubarbjmryjoqfexuqz.supabase.co";
 const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdWJhcmJqbXJ5am9xZmV4dXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjQyNjUsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
 
-const SECRET_PASS = "dada";
+const SECRET_PASS = "chamar";
+const WIPE_TRIGGER = "808801";
 /* ================== */
 
-const supabase = supabase.createClient(
+const supabaseClient = supabase.createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY
 );
 
-/* sender id */
+/* SENDER ID (LOCAL ONLY) */
 let senderId = localStorage.getItem("sender_id");
 if (!senderId) {
   senderId = crypto.randomUUID();
   localStorage.setItem("sender_id", senderId);
 }
 
-/* elements */
+/* ELEMENTS */
 const authOverlay = document.getElementById("auth-overlay");
 const chatContainer = document.getElementById("chat-container");
 const passInput = document.getElementById("pass-input");
-const loginBtn = document.getElementById("login-btn");
 const messagesBox = document.getElementById("messages");
 const msgInput = document.getElementById("msg-input");
-const sendBtn = document.getElementById("send-btn");
 
 let channel = null;
 
 /* LOGIN */
-loginBtn.onclick = async () => {
-  console.log("Login clicked");
-
-  if (passInput.value.trim() !== SECRET_PASS) {
+document.getElementById("login-btn").onclick = async () => {
+  if (passInput.value !== SECRET_PASS) {
     alert("Wrong password");
     return;
   }
@@ -49,14 +46,20 @@ loginBtn.onclick = async () => {
 function initRealtime() {
   if (channel) return;
 
-  channel = supabase
-    .channel("messages-room")
+  channel = supabaseClient
+    .channel("messages-realtime")
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages" },
       payload => {
-        console.log("Realtime message:", payload.new);
-        renderMessage(payload.new);
+        const msg = payload.new;
+
+        if (msg.kind === "wipe") {
+          messagesBox.innerHTML = "";
+          return;
+        }
+
+        renderMessage(msg);
         scrollBottom();
       }
     )
@@ -65,18 +68,16 @@ function initRealtime() {
 
 /* LOAD */
 async function loadMessages() {
-  const { data, error } = await supabase
+  const { data } = await supabaseClient
     .from("messages")
     .select("*")
     .order("created_at");
 
-  if (error) {
-    console.error("Load error:", error);
-    return;
-  }
-
   messagesBox.innerHTML = "";
-  data.forEach(renderMessage);
+  data
+    .filter(m => m.kind === "user")
+    .forEach(renderMessage);
+
   scrollBottom();
 }
 
@@ -84,47 +85,59 @@ async function loadMessages() {
 function renderMessage(msg) {
   const div = document.createElement("div");
   div.className = "msg " + (msg.sender_id === senderId ? "mine" : "theirs");
-  div.textContent = msg.content;
+
+  if (msg.type === "audio") {
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.src = msg.content;
+    div.appendChild(audio);
+  } else {
+    div.textContent = msg.content;
+  }
+
   messagesBox.appendChild(div);
 }
 
-/* SEND (BUTTON ONLY) */
-sendBtn.onclick = async () => {
+/* SEND TEXT */
+document.getElementById("send-btn").onclick = async () => {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  console.log("Sending:", text);
+  if (text === WIPE_TRIGGER) {
+    await supabaseClient.from("messages").insert({
+      kind: "wipe",
+      content: ""
+    });
+    await supabaseClient.from("messages").delete().neq("id", 0);
+    messagesBox.innerHTML = "";
+    msgInput.value = "";
+    return;
+  }
 
-  const { error } = await supabase.from("messages").insert({
+  await supabaseClient.from("messages").insert({
+    kind: "user",
+    type: "text",
     content: text,
     sender_id: senderId
   });
 
-  if (error) {
-    console.error("Insert failed:", error);
-    alert("Insert failed – check console");
-    return;
-  }
+  // Telegram trigger untouched
+  fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+    },
+    body: JSON.stringify({})
+  });
 
   msgInput.value = "";
 };
 
-/* LOCK ONLY ON TAB HIDE */
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) return;
-
-  messagesBox.innerHTML = "";
-  chatContainer.style.display = "none";
-  authOverlay.style.display = "flex";
-  passInput.value = "";
-
-  if (channel) {
-    supabase.removeChannel(channel);
-    channel = null;
-  }
-});
-
-/* scroll */
+/* SCROLL */
 function scrollBottom() {
-  messagesBox.scrollTop = messagesBox.scrollHeight;
+  requestAnimationFrame(() => {
+    messagesBox.scrollTop = messagesBox.scrollHeight;
+  });
 }

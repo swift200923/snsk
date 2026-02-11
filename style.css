@@ -8,7 +8,6 @@ body {
   background: #000;
   color: #fff;
   font-family: "JetBrains Mono", monospace;
-  display: flex;
 }
 
 /* AUTH */
@@ -37,14 +36,12 @@ body {
   color: black;
   border: none;
   cursor: pointer;
-  font-weight: 600;
 }
 
 /* CHAT */
 #chat-container {
   display: none;
   flex-direction: column;
-  width: 100%;
   height: 100vh;
 }
 
@@ -55,7 +52,6 @@ header {
   font-weight: 600;
 }
 
-/* MESSAGES */
 #messages {
   flex: 1;
   padding: 16px;
@@ -71,24 +67,20 @@ header {
   background: #111;
   border: 1px solid #222;
   border-radius: 6px;
-  font-size: 14px;
 }
 
 .msg.mine {
   align-self: flex-end;
-  background: #1a1a1a;
 }
 
 .msg.theirs {
   align-self: flex-start;
 }
 
-/* INPUT */
 .input-area {
   display: flex;
   gap: 10px;
   padding: 12px;
-  background: #000;
   border-top: 1px solid #222;
 }
 
@@ -106,5 +98,4 @@ header {
   color: black;
   border: none;
   cursor: pointer;
-  font-weight: 600;
 }

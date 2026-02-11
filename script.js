@@ -1,14 +1,16 @@
 /* ===== CONFIG ===== */
 const SUPABASE_URL = "https://fqubarbjmryjoqfexuqz.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdWJhcmJqbXJ5am9xZmV4dXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjQyNjUsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
 const SECRET_PASS = "dada"; 
-const WIPE_CODE = "808801"; // The Panic Code
+const WIPE_TRIGGER = "808801"; // The Panic Code
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* Local Identity for Left/Right Chat Bubbles */
 let senderId = localStorage.getItem("sender_id") || crypto.randomUUID();
 localStorage.setItem("sender_id", senderId);
 
+/* UI Elements */
 const authOverlay = document.getElementById("auth-overlay");
 const chatContainer = document.getElementById("chat-container");
 const passInput = document.getElementById("pass-input");
@@ -18,6 +20,7 @@ const loginBtn = document.getElementById("login-btn");
 const sendBtn = document.getElementById("send-btn");
 
 let channel = null;
+let loggedIn = false;
 
 /* LOGIN LOGIC */
 loginBtn.onclick = async () => {
@@ -26,6 +29,7 @@ loginBtn.onclick = async () => {
     alert("Wrong password");
     return;
   }
+  loggedIn = true;
   authOverlay.style.display = "none";
   chatContainer.style.display = "flex";
   await loadMessages();
@@ -40,11 +44,13 @@ function initRealtime() {
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, 
     payload => {
       const msg = payload.new;
-      // 🔥 THE FIX: If anyone sends the wipe code, clear the UI instantly
-      if (msg.content === WIPE_CODE) {
+      
+      // 🔥 THE FIX: If a wipe signal arrives, clear the UI instantly on ALL devices
+      if (msg.content === WIPE_TRIGGER) {
         messagesBox.innerHTML = "";
       } else {
         renderMessage(msg);
+        scrollBottom();
       }
     })
     .subscribe();
@@ -53,19 +59,17 @@ function initRealtime() {
 /* LOAD HISTORY */
 async function loadMessages() {
   const { data, error } = await client.from("messages").select("*").order("created_at");
-  if (error) {
-    console.error("Supabase Error:", error.message);
-    return;
-  }
+  if (error) return;
+
   messagesBox.innerHTML = "";
   if (data) {
-    // If the latest message is a wipe code, we don't load history
-    const isWiped = data.some(m => m.content === WIPE_CODE);
+    // If the latest message is a wipe, don't show history
+    const isWiped = data.some(m => m.content === WIPE_TRIGGER);
     if (!isWiped) {
         data.forEach(renderMessage);
     }
   }
-  messagesBox.scrollTop = messagesBox.scrollHeight;
+  scrollBottom();
 }
 
 /* RENDER MESSAGE */
@@ -74,17 +78,18 @@ function renderMessage(msg) {
   div.className = "msg " + (msg.sender_id === senderId ? "mine" : "theirs");
   div.textContent = msg.content;
   messagesBox.appendChild(div);
-  messagesBox.scrollTop = messagesBox.scrollHeight;
 }
 
-/* SEND MESSAGE */
+/* SEND MESSAGE FUNCTION */
 async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  // 🔥 THE FIX: If I type the wipe code, delete everything from DB
-  if (text === WIPE_CODE) {
-    await client.from("messages").insert({ content: WIPE_CODE, sender_id: senderId });
+  // 🔥 THE FIX: If I type the wipe code, broadcast it THEN delete from DB
+  if (text === WIPE_TRIGGER) {
+    // 1. Send the "signal" so the other person's screen clears instantly
+    await client.from("messages").insert({ content: WIPE_TRIGGER, sender_id: senderId });
+    // 2. Actually wipe the database rows
     await client.from("messages").delete().neq("id", 0);
     messagesBox.innerHTML = "";
     msgInput.value = "";
@@ -96,10 +101,9 @@ async function sendMessage() {
     sender_id: senderId 
   });
 
-  if (error) {
-    alert("Send Error: " + error.message);
-  } else {
+  if (!error) {
     msgInput.value = "";
+    // Telegram trigger (remains unchanged)
     fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
       method: "POST",
       headers: {
@@ -113,4 +117,17 @@ async function sendMessage() {
 }
 
 sendBtn.onclick = sendMessage;
-msgInput.onkeydown = (e) => { if (e.key === "Enter") sendMessage(); };
+
+/* DESKTOP ENTER KEY */
+msgInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    sendMessage();
+  }
+});
+
+/* SCROLL */
+function scrollBottom() {
+  requestAnimationFrame(() => {
+    messagesBox.scrollTop = messagesBox.scrollHeight;
+  });
+}

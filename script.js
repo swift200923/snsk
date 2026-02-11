@@ -5,14 +5,14 @@ const SECRET_PASS = "dada";
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* sender id for left/right alignment */
+/* local identity for left/right alignment */
 let senderId = localStorage.getItem("sender_id");
 if (!senderId) {
   senderId = crypto.randomUUID();
   localStorage.setItem("sender_id", senderId);
 }
 
-/* ELEMENTS */
+/* UI ELEMENTS */
 const authOverlay = document.getElementById("auth-overlay");
 const chatContainer = document.getElementById("chat-container");
 const passInput = document.getElementById("pass-input");
@@ -22,23 +22,21 @@ const loginBtn = document.getElementById("login-btn");
 const sendBtn = document.getElementById("send-btn");
 
 let channel = null;
-let loggedIn = false;
 
-/* LOGIN LOGIC */
+/* LOGIN */
 loginBtn.onclick = async () => {
   const entered = passInput.value.trim().toLowerCase();
   if (entered !== SECRET_PASS.toLowerCase()) {
     alert("Wrong password");
     return;
   }
-  loggedIn = true;
   authOverlay.style.display = "none";
   chatContainer.style.display = "flex";
   await loadMessages();
   initRealtime();
 };
 
-/* REALTIME SYNC */
+/* REALTIME */
 function initRealtime() {
   if (channel) return;
   channel = client
@@ -50,7 +48,7 @@ function initRealtime() {
     .subscribe();
 }
 
-/* LOAD HISTORY */
+/* LOAD */
 async function loadMessages() {
   const { data } = await client.from("messages").select("*").order("created_at");
   messagesBox.innerHTML = "";
@@ -58,10 +56,10 @@ async function loadMessages() {
   scrollBottom();
 }
 
-/* RENDER MESSAGE */
+/* RENDER */
 function renderMessage(msg) {
   const div = document.createElement("div");
-  // Aligns your messages to the right, others to the left
+  // mine = right side, theirs = left side
   div.className = "msg " + (msg.sender_id === senderId ? "mine" : "theirs");
   div.textContent = msg.content;
   messagesBox.appendChild(div);
@@ -73,25 +71,31 @@ async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
 
+  // 1. Insert into Database first
   const { error } = await client.from("messages").insert({ 
     content: text, 
     sender_id: senderId 
   });
 
-  if (!error) {
-    msgInput.value = "";
-    
-    // Trigger Telegram Notification
-    fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-      },
-      body: JSON.stringify({ text: "🔔 New message in Chat Console" })
-    });
+  if (error) {
+    console.error("Database Error:", error);
+    alert("Failed to send to DB: " + error.message);
+    return;
   }
+
+  // 2. Clear input immediately
+  msgInput.value = "";
+
+  // 3. Trigger Telegram (optional, won't stop the chat if it fails)
+  fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+    },
+    body: JSON.stringify({ text: "🔔 New message in Chat Console" })
+  }).catch(e => console.log("Telegram notification failed. Check Edge Function logs."));
 }
 
 sendBtn.onclick = sendMessage;

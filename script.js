@@ -1,13 +1,11 @@
-// 1. CONFIG - Verify these match your Supabase Dashboard EXACTLY
+/* ===== CONFIG ===== */
 const SUPABASE_URL = "https://fqubarbjmryjoqfexuqz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdWJhcmJqbXJ5am9xZmV4dXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjQyNjUsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
 const SECRET_PASS = "dada"; 
+const WIPE_CODE = "808801"; // The Panic Code
 
-// 2. INITIALIZATION
-// We use the global 'supabase' object provided by the CDN link in your index.html
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Local ID for chat alignment
 let senderId = localStorage.getItem("sender_id") || crypto.randomUUID();
 localStorage.setItem("sender_id", senderId);
 
@@ -41,7 +39,13 @@ function initRealtime() {
     .channel("public-room")
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, 
     payload => {
-      renderMessage(payload.new);
+      const msg = payload.new;
+      // 🔥 THE FIX: If anyone sends the wipe code, clear the UI instantly
+      if (msg.content === WIPE_CODE) {
+        messagesBox.innerHTML = "";
+      } else {
+        renderMessage(msg);
+      }
     })
     .subscribe();
 }
@@ -50,12 +54,17 @@ function initRealtime() {
 async function loadMessages() {
   const { data, error } = await client.from("messages").select("*").order("created_at");
   if (error) {
-    console.error("API Key Error or DB Error:", error.message);
-    alert("Supabase Error: " + error.message);
+    console.error("Supabase Error:", error.message);
     return;
   }
   messagesBox.innerHTML = "";
-  if (data) data.forEach(renderMessage);
+  if (data) {
+    // If the latest message is a wipe code, we don't load history
+    const isWiped = data.some(m => m.content === WIPE_CODE);
+    if (!isWiped) {
+        data.forEach(renderMessage);
+    }
+  }
   messagesBox.scrollTop = messagesBox.scrollHeight;
 }
 
@@ -73,6 +82,15 @@ async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
 
+  // 🔥 THE FIX: If I type the wipe code, delete everything from DB
+  if (text === WIPE_CODE) {
+    await client.from("messages").insert({ content: WIPE_CODE, sender_id: senderId });
+    await client.from("messages").delete().neq("id", 0);
+    messagesBox.innerHTML = "";
+    msgInput.value = "";
+    return;
+  }
+
   const { error } = await client.from("messages").insert({ 
     content: text, 
     sender_id: senderId 
@@ -82,7 +100,6 @@ async function sendMessage() {
     alert("Send Error: " + error.message);
   } else {
     msgInput.value = "";
-    // Telegram trigger
     fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
       method: "POST",
       headers: {

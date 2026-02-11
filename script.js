@@ -75,7 +75,7 @@ sendBtn.onclick = async () => {
     sender_id: senderId
   });
   
-  /* Telegram Notification */
+  /* Telegram Notification - pointing to the new dynamic-handler */
   fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
     method: "POST",
     headers: {

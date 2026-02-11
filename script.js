@@ -1,106 +1,121 @@
 /* ===== CONFIG ===== */
-const SB_URL = "https://fqubarbjmryjoqfexuqz.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdWJhcmJqbXJ5am9xZmV4dXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjQyNjUsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
-const PASSWORD = "dada"; 
-const WIPE_TRIGGER = "808801";
+const SUPABASE_URL = "https://fqubarbjmryjoqfexuqz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdWJhcmJqbXJ5am9xZmV4dXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjQyNjUsImV4cCI6MjA4NjE0MDI2NX0.AnL_5uMC7gqIUGqexoiOM2mYFsxjZjVF21W-CUdTPBg";
+const SECRET_PASS = "dada"; 
+const WIPE_CODE = "808801"; 
 
-// Initialize Supabase
-const supabase = window.supabase.createClient(SB_URL, SB_KEY);
+// Initialize Client
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Local ID for alignment (Mine vs Theirs)
-let senderId = localStorage.getItem("sender_id") || crypto.randomUUID();
-localStorage.setItem("sender_id", senderId);
+// Wait for HTML to be ready so login/send buttons actually work
+window.onload = () => {
+    let senderId = localStorage.getItem("sender_id") || crypto.randomUUID();
+    localStorage.setItem("sender_id", senderId);
 
-const messagesBox = document.getElementById("messages");
-const msgInput = document.getElementById("msg-input");
-let channel = null;
+    const authOverlay = document.getElementById("auth-overlay");
+    const chatContainer = document.getElementById("chat-container");
+    const passInput = document.getElementById("pass-input");
+    const messagesBox = document.getElementById("messages");
+    const msgInput = document.getElementById("msg-input");
+    const loginBtn = document.getElementById("login-btn");
+    const sendBtn = document.getElementById("send-btn");
 
-/* 1. LOGIN LOGIC */
-async function handleLogin() {
-    const input = document.getElementById('pass-input').value.trim().toLowerCase();
-    if (input === PASSWORD.toLowerCase()) {
-        document.getElementById('auth-screen').style.display = 'none';
-        document.getElementById('chat-ui').style.display = 'flex';
+    let channel = null;
+
+    /* LOGIN LOGIC */
+    loginBtn.onclick = async () => {
+        const entered = passInput.value.trim().toLowerCase();
+        if (entered !== SECRET_PASS.toLowerCase()) {
+            alert("Wrong password");
+            return;
+        }
+        authOverlay.style.display = "none";
+        chatContainer.style.display = "flex";
         await loadMessages();
         initRealtime();
-    } else {
-        alert("Wrong Password!");
+    };
+
+    /* REALTIME SYNC (Wipe Signal + Delete Detection) */
+    function initRealtime() {
+        if (channel) return;
+        channel = client
+            .channel("public-room")
+            .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, 
+            payload => {
+                // If a new message is the wipe code OR if a DELETE event happens
+                if ((payload.eventType === "INSERT" && payload.new.content === WIPE_CODE) || payload.eventType === "DELETE") {
+                    messagesBox.innerHTML = "";
+                } else if (payload.eventType === "INSERT") {
+                    renderMessage(payload.new);
+                }
+            })
+            .subscribe();
     }
-}
 
-/* 2. REALTIME SYNC (Instant Wipe Included) */
-function initRealtime() {
-    if (channel) return;
-    channel = supabase
-        .channel("public-room")
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, 
-        payload => {
-            const msg = payload.new;
-            if (msg.content === WIPE_TRIGGER) {
-                messagesBox.innerHTML = "";
-            } else {
-                renderMessage(msg);
-            }
-        })
-        .subscribe();
-}
-
-/* 3. LOAD HISTORY */
-async function loadMessages() {
-    const { data, error } = await supabase.from("messages").select("*").order("created_at");
-    if (error) return;
-    messagesBox.innerHTML = "";
-    if (data) {
-        const isWiped = data.some(m => m.content === WIPE_TRIGGER);
-        if (!isWiped) data.forEach(renderMessage);
-    }
-    messagesBox.scrollTop = messagesBox.scrollHeight;
-}
-
-/* 4. RENDER */
-function renderMessage(msg) {
-    const div = document.createElement("div");
-    div.className = "msg " + (msg.sender_id === senderId ? "mine" : "theirs");
-    div.textContent = msg.content;
-    messagesBox.appendChild(div);
-    messagesBox.scrollTop = messagesBox.scrollHeight;
-}
-
-/* 5. SEND MESSAGE (Fixed for Desktop & Mobile) */
-async function sendMessage() {
-    const text = msgInput.value.trim();
-    if (!text) return;
-
-    if (text === WIPE_TRIGGER) {
-        await supabase.from("messages").insert({ content: WIPE_TRIGGER, sender_id: senderId });
-        await supabase.from("messages").delete().neq("id", 0);
+    /* LOAD HISTORY */
+    async function loadMessages() {
+        const { data, error } = await client.from("messages").select("*").order("created_at");
+        if (error) {
+            console.error("Supabase Error:", error.message);
+            return;
+        }
         messagesBox.innerHTML = "";
-        msgInput.value = "";
-        return;
+        if (data) {
+            const isWiped = data.some(m => m.content === WIPE_CODE);
+            if (!isWiped) {
+                data.forEach(renderMessage);
+            }
+        }
+        messagesBox.scrollTop = messagesBox.scrollHeight;
     }
 
-    const { error } = await supabase.from("messages").insert({ 
-        content: text, 
-        sender_id: senderId 
-    });
-
-    if (error) {
-        alert("Send Error: " + error.message);
-    } else {
-        msgInput.value = "";
-        // Telegram Trigger
-        fetch(`${SB_URL}/functions/v1/dynamic-handler`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                apikey: SB_KEY,
-                Authorization: `Bearer ${SB_KEY}`
-            },
-            body: JSON.stringify({ text: "🔔 New message received!" })
-        }).catch(e => console.log("Telegram silent."));
+    /* RENDER MESSAGE */
+    function renderMessage(msg) {
+        const div = document.createElement("div");
+        div.className = "msg " + (msg.sender_id === senderId ? "mine" : "theirs");
+        div.textContent = msg.content;
+        messagesBox.appendChild(div);
+        messagesBox.scrollTop = messagesBox.scrollHeight;
     }
-}
 
-function checkEnter(event) {
-    if (event.key === "Enter") sendMessage();
-}
+    /* SEND MESSAGE */
+    async function sendMessage() {
+        const text = msgInput.value.trim();
+        if (!text) return;
+
+        // 🔥 THE WIPE TRIGGER
+        if (text === WIPE_CODE) {
+            // Send signal to others
+            await client.from("messages").insert({ content: WIPE_CODE, sender_id: senderId });
+            // Hard delete from DB
+            await client.from("messages").delete().neq("id", 0);
+            messagesBox.innerHTML = "";
+            msgInput.value = "";
+            return;
+        }
+
+        const { error } = await client.from("messages").insert({ 
+            content: text, 
+            sender_id: senderId 
+        });
+
+        if (error) {
+            alert("Send Error: " + error.message);
+        } else {
+            msgInput.value = "";
+            // Telegram Notification
+            fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({ text: "🔔 New message received!" })
+            }).catch(e => console.log("Telegram silent."));
+        }
+    }
+
+    sendBtn.onclick = sendMessage;
+    msgInput.onkeydown = (e) => { if (e.key === "Enter") sendMessage(); };
+};

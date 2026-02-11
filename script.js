@@ -122,18 +122,18 @@ document.getElementById("send-btn").onclick = async () => {
   });
 
   // Telegram trigger untouched
-  fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-    },
-    body: JSON.stringify({})
-  });
+  fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+  },
+  body: JSON.stringify({
+    text: "🔔 Someone sent you a new chat message"
+  })
+});
 
-  msgInput.value = "";
-};
 
 /* SCROLL */
 function scrollBottom() {

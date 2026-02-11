@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chat Console</title>
 
+  <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+  <!-- Font -->
   <link
     href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap"
     rel="stylesheet"
@@ -15,13 +17,17 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 
-<body> 
+<body>
+
   <!-- AUTH -->
   <div id="auth-overlay">
     <h2>Enter The Password</h2>
     <p>Password is color.<br />(explacable)</p>
+
     <input type="password" id="pass-input" />
-    <button id="login-btn">Enter</button>
+
+    <!-- 🔴 FIX IS HERE -->
+    <button id="login-btn" type="button">Enter</button>
   </div>
 
   <!-- CHAT -->
@@ -32,7 +38,7 @@
 
     <div class="input-area">
       <input type="text" id="msg-input" placeholder="Type message…" />
-      <button id="send-btn">Send</button>
+      <button id="send-btn" type="button">Send</button>
     </div>
   </div>
 

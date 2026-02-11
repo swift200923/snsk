@@ -50,7 +50,8 @@ function initRealtime() {
 
 /* LOAD */
 async function loadMessages() {
-  const { data } = await client.from("messages").select("*").order("created_at");
+  const { data, error } = await client.from("messages").select("*").order("created_at");
+  if (error) console.error("Load Error:", error);
   messagesBox.innerHTML = "";
   if (data) data.forEach(renderMessage);
   scrollBottom();
@@ -71,7 +72,7 @@ async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
 
-  // 1. Insert into Database first
+  // 1. Insert into Database
   const { error } = await client.from("messages").insert({ 
     content: text, 
     sender_id: senderId 
@@ -79,14 +80,14 @@ async function sendMessage() {
 
   if (error) {
     console.error("Database Error:", error);
-    alert("Failed to send to DB: " + error.message);
+    alert("FAILED TO SEND: " + error.message);
     return;
   }
 
-  // 2. Clear input immediately
+  // 2. Clear input
   msgInput.value = "";
 
-  // 3. Trigger Telegram (optional, won't stop the chat if it fails)
+  // 3. Trigger Telegram (will not stop chat if it fails)
   fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
     method: "POST",
     headers: {
@@ -95,7 +96,7 @@ async function sendMessage() {
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`
     },
     body: JSON.stringify({ text: "🔔 New message in Chat Console" })
-  }).catch(e => console.log("Telegram notification failed. Check Edge Function logs."));
+  }).catch(e => console.log("Telegram notification failed."));
 }
 
 sendBtn.onclick = sendMessage;

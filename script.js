@@ -5,10 +5,10 @@ const SECRET_PASS = "dada";
 const WIPE_CODE = "808801"; 
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-let myPeer, localStream, currentCall;
+let myPeer, localStream, currentCall, senderId;
 
 window.onload = () => {
-    let senderId = localStorage.getItem("sender_id") || crypto.randomUUID();
+    senderId = localStorage.getItem("sender_id") || crypto.randomUUID();
     localStorage.setItem("sender_id", senderId);
 
     const callModal = document.getElementById("call-modal");
@@ -31,37 +31,40 @@ window.onload = () => {
 
     function initPeer() {
         myPeer = new Peer(senderId);
+        
         myPeer.on('call', (call) => {
             currentCall = call;
-            callModal.style.display = "flex"; // Show the Accept/Reject screen
+            callModal.style.display = "flex"; // Show Accept/Reject
         });
     }
 
-    // ACCEPT CALL
+    // ACCEPT
     document.getElementById("accept-call").onclick = async () => {
         callModal.style.display = "none";
         endCallBtn.style.display = "inline-block";
         callBtn.style.display = "none";
         
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        currentCall.answer(localStream);
+        // Use Communication profile for earpiece routing
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { echoCancellation: true, noiseSuppression: true } 
+        });
         
+        currentCall.answer(localStream);
         currentCall.on('stream', (remoteStream) => {
             const audio = document.getElementById('remote-audio');
             audio.srcObject = remoteStream;
-            audio.setSinkId ? audio.setSinkId('') : null; // Default to earpiece/system choice
             audio.play();
         });
     };
 
-    // REJECT CALL
+    // REJECT
     document.getElementById("reject-call").onclick = () => {
         callModal.style.display = "none";
         if (currentCall) currentCall.close();
     };
 
-    async function startCall(targetId) {
-        alert("Calling...");
+    // SIGNALING TRIGGER
+    async function startCallSequence(targetId) {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const call = myPeer.call(targetId, localStream);
         
@@ -79,34 +82,47 @@ window.onload = () => {
         if (channel) return;
         channel = client.channel("public-room").on("postgres_changes", { event: "*", schema: "public", table: "messages" }, payload => {
             const msg = payload.new;
+            
+            // WIPE
             if (payload.eventType === "DELETE" || (msg && msg.content === WIPE_CODE)) {
                 messagesBox.innerHTML = "";
-            } else if (msg && msg.content === "SIGNAL_CALL_START" && msg.sender_id !== senderId) {
-                // DON'T auto-start, the 'on(call)' handler above will trigger the modal
-            } else if (msg && msg.content !== "SIGNAL_CALL_START") {
+            } 
+            // INCOMING SIGNAL DETECTION
+            else if (msg && msg.content === "SIGNAL_CALL_START" && msg.sender_id !== senderId) {
+                // If I am not the one who started it, I wait for the 'on(call)' Peer event
+                console.log("Incoming signal detected from:", msg.sender_id);
+            } 
+            // MESSAGE
+            else if (msg && msg.content !== "SIGNAL_CALL_START") {
                 renderMessage(msg);
             }
         }).subscribe();
     }
 
     callBtn.onclick = async () => {
-        await client.from("messages").insert({ content: "SIGNAL_CALL_START", sender_id: senderId });
-        // The sender needs to wait for the other side to be ready
-        startCall(prompt("Enter the Peer ID of the person (or just wait for signals to connect)")); 
-        // Note: In a 1-on-1 chat, you'd usually just call the other stored ID.
+        // Find the last person who messaged to call them
+        const { data } = await client.from("messages").select("sender_id").neq("sender_id", senderId).order("created_at", { ascending: false }).limit(1);
+        
+        if (data && data.length > 0) {
+            const target = data[0].sender_id;
+            await client.from("messages").insert({ content: "SIGNAL_CALL_START", sender_id: senderId });
+            startCallSequence(target);
+            alert("Calling...");
+        } else {
+            alert("No one to call. Send a message first!");
+        }
     };
 
-    /* END CALL */
     endCallBtn.onclick = () => {
         if (currentCall) currentCall.close();
         if (localStream) localStream.getTracks().forEach(t => t.stop());
         document.getElementById('remote-audio').srcObject = null;
         endCallBtn.style.display = "none";
         callBtn.style.display = "inline-block";
-        location.reload(); // Cleanest way to reset PeerJS state
+        location.reload(); 
     };
 
-    /* REST OF YOUR WORKING FUNCTIONS (Load, Render, Send) */
+    /* MESSAGE FUNCTIONS */
     async function loadMessages() {
         const { data } = await client.from("messages").select("*").order("created_at");
         if (data) data.filter(m => m.content !== "SIGNAL_CALL_START").forEach(renderMessage);

@@ -23,20 +23,19 @@
       color: #00ff00;
     }
     .call-btns { display: flex; gap: 20px; margin-top: 30px; }
-    .btn-acc { background: #28a745; color: white; border: none; padding: 15px 30px; cursor: pointer; border-radius: 5px; font-weight: bold; }
-    .btn-rej { background: #dc3545; color: white; border: none; padding: 15px 30px; cursor: pointer; border-radius: 5px; font-weight: bold; }
+    .btn-acc { background: #28a745; color: white; border: none; padding: 15px 40px; cursor: pointer; border-radius: 5px; font-weight: bold; }
+    .btn-rej { background: #dc3545; color: white; border: none; padding: 15px 40px; cursor: pointer; border-radius: 5px; font-weight: bold; }
   </style>
 </head>
 <body>
   <div id="auth-overlay">
     <h2>Enter The Password</h2>
-    <p>Password is color.<br />(explacable)</p>
     <input type="password" id="pass-input" />
     <button id="login-btn" type="button">Enter</button>
   </div>
 
   <div id="call-modal">
-    <h2 id="caller-name">INCOMING VOICE CALL</h2>
+    <h2 id="caller-name">📞 INCOMING CALL...</h2>
     <div class="call-btns">
       <button class="btn-acc" id="accept-call">ACCEPT</button>
       <button class="btn-rej" id="reject-call">REJECT</button>
@@ -51,6 +50,7 @@
     </header>
     
     <audio id="remote-audio" autoplay></audio>
+    <audio id="ringtone" src="https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3" loop></audio>
     
     <div id="messages"></div>
     <div class="input-area">

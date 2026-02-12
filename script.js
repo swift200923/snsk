@@ -7,7 +7,9 @@ const WIPE_CODE = "808801";
 // Initialize Client
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Wait for HTML to be ready so login/send buttons actually work
+let myPeer;
+
+// Wait for HTML to be ready
 window.onload = () => {
     let senderId = localStorage.getItem("sender_id") || crypto.randomUUID();
     localStorage.setItem("sender_id", senderId);
@@ -19,8 +21,10 @@ window.onload = () => {
     const msgInput = document.getElementById("msg-input");
     const loginBtn = document.getElementById("login-btn");
     const sendBtn = document.getElementById("send-btn");
+    const callBtn = document.getElementById("call-btn");
 
     let channel = null;
+    let loggedIn = false;
 
     /* LOGIN LOGIC */
     loginBtn.onclick = async () => {
@@ -29,24 +33,62 @@ window.onload = () => {
             alert("Wrong password");
             return;
         }
+        loggedIn = true;
         authOverlay.style.display = "none";
         chatContainer.style.display = "flex";
         await loadMessages();
         initRealtime();
+        initPeer(); // Activate Calling after login
     };
 
-    /* REALTIME SYNC (Wipe Signal + Delete Detection) */
+    /* PEERJS (VOICE CALL) LOGIC */
+    function initPeer() {
+        myPeer = new Peer(senderId); // Use senderId as the unique ID for calling
+        
+        myPeer.on('open', (id) => console.log('Your Call ID is:', id));
+
+        myPeer.on('call', async (call) => {
+            if (confirm("Incoming Voice Call. Accept?")) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                call.answer(stream); // Send your audio back
+                call.on('stream', (remoteStream) => {
+                    document.getElementById('remote-audio').srcObject = remoteStream;
+                });
+            }
+        });
+    }
+
+    async function startVoiceCall(targetPeerId) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const call = myPeer.call(targetPeerId, stream);
+            call.on('stream', (remoteStream) => {
+                document.getElementById('remote-audio').srcObject = remoteStream;
+            });
+        } catch (err) {
+            console.error("Failed to get local stream", err);
+        }
+    }
+
+    /* REALTIME SYNC */
     function initRealtime() {
         if (channel) return;
         channel = client
             .channel("public-room")
             .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, 
             payload => {
-                // If a new message is the wipe code OR if a DELETE event happens
-                if ((payload.eventType === "INSERT" && payload.new.content === WIPE_CODE) || payload.eventType === "DELETE") {
+                const msg = payload.new;
+                // 1. Instant Wipe
+                if ((payload.eventType === "INSERT" && msg.content === WIPE_CODE) || payload.eventType === "DELETE") {
                     messagesBox.innerHTML = "";
-                } else if (payload.eventType === "INSERT") {
-                    renderMessage(payload.new);
+                } 
+                // 2. Incoming Call Signal (Hidden from UI)
+                else if (payload.eventType === "INSERT" && msg.content === "SIGNAL_CALL_START" && msg.sender_id !== senderId) {
+                    startVoiceCall(msg.sender_id);
+                }
+                // 3. Normal Message
+                else if (payload.eventType === "INSERT") {
+                    renderMessage(msg);
                 }
             })
             .subscribe();
@@ -55,15 +97,13 @@ window.onload = () => {
     /* LOAD HISTORY */
     async function loadMessages() {
         const { data, error } = await client.from("messages").select("*").order("created_at");
-        if (error) {
-            console.error("Supabase Error:", error.message);
-            return;
-        }
+        if (error) return;
         messagesBox.innerHTML = "";
         if (data) {
             const isWiped = data.some(m => m.content === WIPE_CODE);
             if (!isWiped) {
-                data.forEach(renderMessage);
+                // Don't show call signals in history
+                data.filter(m => m.content !== "SIGNAL_CALL_START").forEach(renderMessage);
             }
         }
         messagesBox.scrollTop = messagesBox.scrollHeight;
@@ -83,11 +123,8 @@ window.onload = () => {
         const text = msgInput.value.trim();
         if (!text) return;
 
-        // 🔥 THE WIPE TRIGGER
         if (text === WIPE_CODE) {
-            // Send signal to others
             await client.from("messages").insert({ content: WIPE_CODE, sender_id: senderId });
-            // Hard delete from DB
             await client.from("messages").delete().neq("id", 0);
             messagesBox.innerHTML = "";
             msgInput.value = "";
@@ -103,7 +140,6 @@ window.onload = () => {
             alert("Send Error: " + error.message);
         } else {
             msgInput.value = "";
-            // Telegram Notification
             fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
                 method: "POST",
                 headers: {
@@ -115,6 +151,16 @@ window.onload = () => {
             }).catch(e => console.log("Telegram silent."));
         }
     }
+
+    /* CALL BUTTON */
+    callBtn.onclick = async () => {
+        // Send hidden signal to other person to trigger the PeerJS call
+        await client.from("messages").insert({ 
+            content: "SIGNAL_CALL_START", 
+            sender_id: senderId 
+        });
+        alert("Calling other side...");
+    };
 
     sendBtn.onclick = sendMessage;
     msgInput.onkeydown = (e) => { if (e.key === "Enter") sendMessage(); };

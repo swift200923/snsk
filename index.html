@@ -8,6 +8,23 @@
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* New Call UI */
+    #call-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 9999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+    .call-actions { display: flex; gap: 20px; }
+    .btn-accept { background: #28a745; color: white; border: none; padding: 15px 30px; cursor: pointer; }
+    .btn-reject { background: #dc3545; color: white; border: none; padding: 15px 30px; cursor: pointer; }
+  </style>
 </head>
 <body>
   <div id="auth-overlay">
@@ -16,6 +33,15 @@
     <input type="password" id="pass-input" />
     <button id="login-btn" type="button">Enter</button>
   </div>
+
+  <div id="call-modal">
+    <h2 id="call-status">Incoming Voice Call...</h2>
+    <div class="call-actions">
+      <button class="btn-accept" id="accept-call">ACCEPT</button>
+      <button class="btn-reject" id="reject-call">REJECT</button>
+    </div>
+  </div>
+
   <div id="chat-container">
     <header>
       How are you?

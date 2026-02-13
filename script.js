@@ -136,16 +136,31 @@ window.onload = () => {
     async function sendMessage() {
         const text = msgInput.value.trim();
         if (!text) return;
+        
         if (text === WIPE_CODE) {
             await client.from("messages").delete().neq("id", 0);
             messagesBox.innerHTML = "";
             msgInput.value = "";
             return;
         }
-        await client.from("messages").insert({ content: text, sender_id: senderId });
-        msgInput.value = "";
-    }
 
-    document.getElementById("send-btn").onclick = sendMessage;
-    msgInput.onkeydown = (e) => { if (e.key === "Enter") sendMessage(); };
-};
+        const { error } = await client.from("messages").insert({ content: text, sender_id: senderId });
+        
+        if (!error) {
+            msgInput.value = "";
+            
+            // 🔥 TRIGGER THE NOTIFICATION FUNCTION
+            fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "apikey": SUPABASE_ANON_KEY,
+                    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({ text: "🔔 New message received in Chat Console!" })
+            })
+            .then(res => res.json())
+            .then(data => console.log("Telegram response:", data))
+            .catch(e => console.error("Notification trigger failed:", e));
+        }
+    }

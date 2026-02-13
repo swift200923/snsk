@@ -11,38 +11,47 @@ window.onload = () => {
     senderId = localStorage.getItem("sender_id") || crypto.randomUUID();
     localStorage.setItem("sender_id", senderId);
 
-    const callModal = document.getElementById("call-modal");
-    const ringtone = document.getElementById("ringtone");
+    const authOverlay = document.getElementById("auth-overlay");
+    const chatContainer = document.getElementById("chat-container");
+    const passInput = document.getElementById("pass-input");
     const messagesBox = document.getElementById("messages");
     const msgInput = document.getElementById("msg-input");
     const callBtn = document.getElementById("call-btn");
     const endCallBtn = document.getElementById("end-call-btn");
+    const callModal = document.getElementById("call-modal");
+    const ringtone = document.getElementById("ringtone");
 
+    /* LOGIN LOGIC */
     document.getElementById("login-btn").onclick = async () => {
-        if (document.getElementById("pass-input").value.trim().toLowerCase() === SECRET_PASS) {
-            document.getElementById("auth-overlay").style.display = "none";
-            document.getElementById("chat-container").style.display = "flex";
+        if (passInput.value.trim().toLowerCase() === SECRET_PASS) {
+            authOverlay.style.display = "none";
+            chatContainer.style.display = "flex";
             await loadMessages();
             initRealtime();
             initPeer();
-        } else { alert("Wrong password"); }
+        } else { 
+            alert("Wrong password"); 
+        }
     };
 
+    /* PEERJS LOGIC */
     function initPeer() {
         myPeer = new Peer(senderId);
         
         myPeer.on('call', (call) => {
             currentCall = call;
             callModal.style.display = "flex"; 
-            ringtone.play(); // Play ringtone on incoming
+            if (ringtone) ringtone.play();
         });
     }
 
-    // ACCEPT CALL
+    /* ACCEPT CALL */
     document.getElementById("accept-call").onclick = async () => {
         callModal.style.display = "none";
-        ringtone.pause();
-        ringtone.currentTime = 0;
+        if (ringtone) {
+            ringtone.pause();
+            ringtone.currentTime = 0;
+        }
         endCallBtn.style.display = "inline-block";
         callBtn.style.display = "none";
         
@@ -56,14 +65,14 @@ window.onload = () => {
         });
     };
 
-    // REJECT CALL
+    /* REJECT CALL */
     document.getElementById("reject-call").onclick = () => {
         callModal.style.display = "none";
-        ringtone.pause();
+        if (ringtone) ringtone.pause();
         if (currentCall) currentCall.close();
     };
 
-    // OUTGOING CALL SEQUENCE
+    /* OUTGOING CALL */
     async function startCallSequence(targetId) {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const call = myPeer.call(targetId, localStream);
@@ -78,22 +87,22 @@ window.onload = () => {
         currentCall = call;
     }
 
+    /* REALTIME SYNC */
     function initRealtime() {
         client.channel("public-room").on("postgres_changes", { event: "*", schema: "public", table: "messages" }, payload => {
             const msg = payload.new;
             if (payload.eventType === "DELETE" || (msg && msg.content === WIPE_CODE)) {
                 messagesBox.innerHTML = "";
             } else if (msg && msg.content === "SIGNAL_CALL_START" && msg.sender_id !== senderId) {
-                // Incoming signal logic is handled by myPeer.on('call')
+                // Incoming handled by myPeer.on('call')
             } else if (msg && msg.content !== "SIGNAL_CALL_START") {
                 renderMessage(msg);
             }
         }).subscribe();
     }
 
-    // CLICK CALL BUTTON
+    /* CALL BUTTON */
     callBtn.onclick = async () => {
-        // Find the last person who messaged
         const { data } = await client.from("messages")
             .select("sender_id")
             .neq("sender_id", senderId)
@@ -110,6 +119,7 @@ window.onload = () => {
         }
     };
 
+    /* END CALL */
     endCallBtn.onclick = () => {
         if (currentCall) currentCall.close();
         if (localStream) localStream.getTracks().forEach(t => t.stop());
@@ -119,6 +129,7 @@ window.onload = () => {
         location.reload(); 
     };
 
+    /* MESSAGE FUNCTIONS */
     async function loadMessages() {
         const { data } = await client.from("messages").select("*").order("created_at");
         if (data) data.filter(m => m.content !== "SIGNAL_CALL_START").forEach(renderMessage);
@@ -149,7 +160,7 @@ window.onload = () => {
         if (!error) {
             msgInput.value = "";
             
-            // 🔥 TRIGGER THE NOTIFICATION FUNCTION
+            // 🔥 TELEGRAM NOTIFICATION TRIGGER
             fetch(`${SUPABASE_URL}/functions/v1/dynamic-handler`, {
                 method: "POST",
                 headers: {
@@ -164,3 +175,7 @@ window.onload = () => {
             .catch(e => console.error("Notification trigger failed:", e));
         }
     }
+
+    document.getElementById("send-btn").onclick = sendMessage;
+    msgInput.onkeydown = (e) => { if (e.key === "Enter") sendMessage(); };
+};
